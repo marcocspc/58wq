@@ -28,8 +28,8 @@ description: >- # this means to ignore newlines until "baseurl:"
   @marcocspc blog to post about programming, stories (not from instagram, I kinda turn
   myself into a writer sometimes), games or whatever I like to write about. I post in
   portuguese and english.
-baseurl: "" # the subpath of your site, e.g. /blog
-url: "" # the base hostname & protocol for your site, e.g. http://example.com
+baseurl: "/58wq" # the subpath of your site, e.g. /blog
+url: "https://marcocspc.github.io" # the base hostname & protocol for your site, e.g. http://example.com
 twitter_username: marcocspc 
 github_username: marcocspc 
 
