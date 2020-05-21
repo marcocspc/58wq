@@ -63,6 +63,9 @@ GEM
       ffi (~> 1.9)
     terminal-table (1.8.0)
       unicode-display_width (~> 1.1, >= 1.1.1)
+    texture (0.4)
+      jekyll (>= 3.7)
+      jekyll-seo-tag (>= 2.1)
     thread_safe (0.3.6)
     tzinfo (1.2.7)
       thread_safe (~> 0.1)
@@ -78,6 +81,7 @@ DEPENDENCIES
   jekyll (~> 4.0.1)
   jekyll-feed (~> 0.12)
   minima (~> 2.5)
+  texture
   tzinfo (~> 1.2)
   tzinfo-data
   wdm (~> 0.1.1)
