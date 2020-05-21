@@ -35,8 +35,7 @@ github_username: marcocspc
 
 # Build settings
 #theme: texture
-#remote_theme: thelehhman/texture
-remote_theme: b2a3e8/jekyll-theme-console
+remote_theme: thelehhman/texture
 plugins:
   - jekyll-feed
 
