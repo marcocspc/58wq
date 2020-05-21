@@ -35,7 +35,7 @@ github_username: marcocspc
 
 # Build settings
 # theme: texture
-remote-theme: thelehhman/texture
+remote_theme: thelehhman/texture
 plugins:
   - jekyll-feed
 
@@ -59,15 +59,15 @@ plugins:
 #   - vendor/gems/
 #   - vendor/ruby/
 
-    #texture:
-    #  title: :wq 
-    #  tagline: >-
-    #    Por/by marcocspc.
-    #    Um blog sobre contos e programação.
-    #    A blog about tales and programming.
-    #  date_format: "%b, %-d %Y"
-    #  style: black 
-    #
-    #  social_links:
-    #    twitter: marcocspc 
-    #    github: marcocspc 
+texture:
+  title: :wq 
+  tagline: >-
+    Por/by marcocspc.
+    Um blog sobre contos e programação.
+    A blog about tales and programming.
+  date_format: "%b, %-d %Y"
+  style: black 
+
+  social_links:
+    twitter: marcocspc 
+    github: marcocspc 
