@@ -3,5 +3,5 @@ _site
 .jekyll-cache
 .jekyll-metadata
 vendor
-*swp
+*.swp
 .DS_Store
