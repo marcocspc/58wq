@@ -220,3 +220,270 @@ systemctl disable wayvnc
 ```
 
 That's it for now. I hope I can fix that black screen issue soon.
+
+## The Black Screen of Death
+
+Ok, chapter two. I have tried again and again to use wayland, but as for now there are no guides to do it. Instead, I will try to use X11 with Archlinux, as it is described on [this](https://steamcommunity.com/sharedfiles/filedetails/?id=680514371) guide.
+
+To begin with, I'm going to repeat the same commands as before. Starting with variables:
+
+```
+export CONTAINER=steamplay3
+export IMAGE=archlinux/current/amd64
+export IMAGE_SERVER=images
+export USERNAME=marcocspc
+export HOMEINCONTAINER=/home/marcocspc
+```
+
+Use these same variables inside the container:
+
+```
+sudo lxc exec $CONTAINER export CONTAINER=steamplay3
+sudo lxc exec $CONTAINER export IMAGE=archlinux/current/amd64
+sudo lxc exec $CONTAINER export IMAGE_SERVER=images
+sudo lxc exec $CONTAINER export USERNAME=marcocspc
+sudo lxc exec $CONTAINER export HOMEINCONTAINER=/home/marcocspc
+```
+
+For some reason, arch image has a bug that doesn't allow it to get an IP, hence disabling internet access. To circumvent this, do:
+
+```
+sudo lxc config set $CONTAINER security.nesting true
+sudo lxc restart $CONTAINER
+```
+
+Update all packages inside the container (get a root terminal first on it):
+
+```
+sudo lxc shell $CONTAINER
+pacman -Syu
+```
+
+The guide I was reading did not using containers. So I had to first get nvidia drivers working inside lxc, as decribed [here](https://theorangeone.net/posts/lxc-nvidia-gpu-passthrough/). To do that I needed to install the same drivers of my host inside the container. But I didn't remember the version I installed, so I had to run this command to discover it:
+
+```
+nvidia-smi
+...
++-----------------------------------------------------------------------------+
+| NVIDIA-SMI 460.32.03    Driver Version: 460.32.03    CUDA Version: 11.2     |
+|-------------------------------+----------------------+----------------------+
+...
+```
+
+Shutdown the container:
+
+```
+sudo lxc stop $CONTAINER
+```
+
+Let's mount nvidia stuff inside the container. Also we mount some tty and input devices as shown [here](https://discuss.linuxcontainers.org/t/xserver-inside-lxc-container/5022) and [here](https://forum.proxmox.com/threads/gpu-devices-passthrough.80248/) for running X later:
+
+For the tty devices, try to find a high number by doing:
+
+```
+ls -l /dev/tty*
+```
+
+For example, on my setup I have found /dev/tty40, which is the one I use here:
+
+```
+export CNT=$CONTAINER
+export DUMMY_TTY=/dev/tty40
+for i in $(ls /dev/nvidia*); do sudo lxc config device add $CNT $(basename $i) disk source=$i path=$i ; done
+for i in /dev/tty0 /dev/tty1 /dev/tty2 /dev/tty3 /dev/tty4 /dev/tty5 /dev/tty6 /dev/tty7 ; do sudo lxc config device add $CNT $(basename $i) unix-char source=$DUMMY_TTY path=$i ; done
+for i in $(ls /dev/input/event*); do sudo lxc config device add $CNT $(basename $i) unix-char source=$i path=$i ; done
+for i in $(ls /dev/input/mouse*); do sudo lxc config device add $CNT $(basename $i) unix-char source=$i path=$i ; done
+for i in $(ls /dev/input/mice*); do sudo lxc config device add $CNT $(basename $i) unix-char source=$i path=$i ; done
+```
+
+Also, we need to set the permissions so the container can use all the mounted files. To do this, we add cgroup.device entries to the container configuration. As we added nvidia, tty and input/* devices, we do as follows:
+
+```
+
+```
+var=$(cat << EOF 
+lxc.cgroup.devices.allow = c 4:* rwm
+lxc.cgroup.devices.allow = c 195:* rwm
+lxc.cgroup.devices.allow = c 235:* rwm
+lxc.cgroup.devices.allow = c 13:* rwm
+EOF
+)
+sudo lxc config set $CONTAINER raw.lxc "$var"
+```
+
+*WARNING* the numbers were these on my context. There might be chance that yours are different. To find these numbers, issue the command below. They will be separated by commas, pay attention to the repeated numbers on each line and repeat the command above with wildcards. For example: in my setup, all /dev/input/event* started with 13, so I wrote 13:*.
+
+```
+for i in $(sudo lxc config device show $CONTAINER | grep source | awk '{print $2}') ; do ls -l $i ; done
+```
+
+Start the container again:
+
+```
+sudo lxc start $CONTAINER
+sudo lxc shell $CONTAINER
+```
+
+Get the driver (in the container):
+
+```
+cd ~
+mkdir downloads
+cd downloads
+pacman -S --noconfirm aria2
+aria2c -x 16 -s 16 https://us.download.nvidia.com/XFree86/Linux-x86_64/460.32.03/NVIDIA-Linux-x86_64-460.32.03.run
+chmod +x NVIDIA-Linux-x86_64-460.32.03.run
+./NVIDIA-Linux-x86_64-460.32.03.run --no-kernel-module #accept any error and answer yes to any question
+```
+
+After the installation is done, you may type this to check the driver version:
+
+```
+# nvidia-smi
+...
++-----------------------------------------------------------------------------+
+| NVIDIA-SMI 460.32.03    Driver Version: 460.32.03    CUDA Version: 11.2     |
+|-------------------------------+----------------------+----------------------+
+...
+```
+
+Now let's install the needed packages inside the container. First enable multilib:
+
+```
+vi /etc/pacman.conf
+# Uncomment these lines: 
+#[multilib]
+#Include = /etc/pacman.d/mirrorlist
+```
+
+Upgrade the system:
+
+```
+pacman -Syyu --noconfirm
+```
+
+Now finally install the packages:
+
+```
+pacman -S --overwrite "*" --noconfirm xf86-input-libinput xorg-server xorg-apps xorg-xinit linux-headers ttf-liberation lib32-alsa-plugins lib32-curl pulseaudio pulseaudio-alsa pamixer xfwm4 xfce4-session xfdesktop lxterminal
+```
+
+"*"
+
+Next step, according to the main guide, is to create Xwrapper.config and add the line allowed_users=anybody, so X can be started from an SSH session:
+
+```
+vi /etc/X11/Xwrapper.config
+```
+
+Add an user to play the games. Here I use the username from that environment variable:
+
+```
+useradd -m -g users -G video,storage,power -s /bin/bash $USERNAME
+``` 
+
+Set the password for this user:
+
+```
+passwd $USERNAME
+```
+
+Install steam:
+
+```
+pacman -S --noconfirm steam
+```
+
+On the original guide, monitor, mouse and keyboard are used to set up steam. Here I try to do it differently, we are using vnc to do it. First I'm going to try to create a "virtual monitor" so vnc can attach to. This is done the same way as in the guide. Edit /edid.txt and paste the following content:
+
+```
+vi /edid.txt
+```
+
+Content:
+
+```
+00 ff ff ff ff ff ff 00 1e 6d 39 58 37 f4 05 00 0c 15 01 03 80 30 1b 78 ea 33 31 a3 54 51 9e 27 11 50 54 a5 4b 00 71 4f 81 80 81 8f b3 00 01 01 01 01 01 01 01 01 02 3a 80 18 71 38 2d 40 58 2c 45 00 dd 0c 11 00 00 1e 00 00 00 fd 00 38 4b 1e 53 0f 00 0a 20 20 20 20 20 20 00 00 00 fc 00 45 32 32 31 31 0a 20 20 20 20 20 20 20 00 00 00 ff 00 31 31 32 4e 44 56 57 42 47 31 39 39 0a 00 38
+```
+
+Now edit /etc/X11/xorg.conf, find the section "Monitor" and add the following lines:
+
+```
+    Option "ConnectedMonitor""DFP-2"
+    Option "CustomEDID""DFP-2:/edid.txt"
+```
+
+On the original guide, monitor, mouse and keyboard are used to set up steam. Here I try to do it differently, we are using vnc to do it. I've found a [question](https://unix.stackexchange.com/questions/597528/virtual-monitor-when-using-nvidia-graphics-for-vnc-based-second-monitor) on stackexchange pointing me to [this guide](https://docs.nvidia.com/grid/9.0/grid-vgpu-user-guide/index.html#installing-configuring-x11vnc-on-linux-server). Now we install x11vnc and set it up so we can see our monitor while xfce is running and we are capable of interacting with steam.
+
+```
+nvidia-xconfig --query-gpu-info
+```
+
+Example output:
+
+```
+...
+GPU #0:
+  Name      : GeForce GTX 1060 6GB
+  UUID      : ########################################
+  PCI BusID : PCI:1:0:0
+...
+```
+
+It's the last line from this output what we want. Next, edit /etc/X11/xorg.conf:
+
+```
+vi /etc/X11/xorg.conf
+```
+
+Find the section "Device" and add the line:
+
+```
+...
+Section "Device"
+    Identifier "Device0"
+    Driver "nvidia"
+    VendorName "NVIDIA Corporation"
+    BusID "YOURBUSID" # <-- add this line 
+    Option "nopowerconnectorcheck" # <-- add this line 
+    Option "ExactModeTimingsDVI" # <-- add this line 
+EndSection
+...
+```
+
+Also, find the section "Screen" and add this line:
+
+```
+...
+    Option         "AllowEmptyInitialConfiguration""True" # <-- This line
+    Option         "ConnectedMonitor""DFP" # <-- This line
+    Option         "UseDisplayDevice""DFP-2" # <-- This line
+...
+```
+
+Now we save the file and test if it's working:
+
+```
+startxfce4
+```
+
+If it worked, you will get some warnings, but xfce will keep running. Press Ctrl+C to cancell. Now let's install vnc server and expose the container port 5900.
+
+To install x11vnc, run on the container:
+
+```
+pacman -S --noconfirm x11vnc
+```
+
+Following, run this on the *host*:
+
+```
+sudo lxc config device add $CONTAINER vnc5900 proxy listen=tcp:0.0.0.0:5900 connect=tcp:127.0.0.1:5900
+```
+
+#TODO test if x11vnc + startxfce4 is working
+#TODO create service files
+#TODO change monitor resolution
+#TODO login into steam
+#TODO start steam automatically when launching xfce
+#TODO mount already existing steam library into the users homefolder
