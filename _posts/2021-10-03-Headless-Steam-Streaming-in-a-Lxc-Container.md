@@ -140,7 +140,12 @@ Login into the container again, switch to your user and start sway and wayvnc to
 ```
 sudo lxc exec $CONTAINER bash
 su $USERNAME
-echo exec_always /usr/bin/steam >> ~/.config/sway/config
+#needed to have audio on the stream
+echo exec_always pulseaudio --start >> ~/.config/sway/config
+echo exec_always pamixer -u >> ~/.config/sway/config
+echo exec_always pamixer --set-volume 90 >> ~/.config/sway/config
+echo exec_always /usr/bin/Xwayland :11 >> ~/.config/sway/config
+echo exec_always DISPLAY=:11 steam /usr/bin/steam >> ~/.config/sway/config
 echo output HEADLESS-1 resolution 1280x720 >> ~/.config/sway/config
 XDG_SESSION_TYPE=wayland WAYLAND_DISPLAY=wayland-1 XDG_RUNTIME_DIR=/tmp WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 sway --my-next-gpu-wont-be-nvidia
 ```
@@ -222,6 +227,12 @@ systemctl disable wayvnc
 That's it for now. I hope I can fix that black screen issue soon.
 
 ## The Black Screen of Death
+
+I solved the black screen of death by changing the contents of ~/.config/sway/config, based on what I saw [here](https://github.com/ValveSoftware/steam-for-linux/issues/6148). I already updated the lines above, where I write contents to the file.
+
+Still need to fix audio and controller input.
+
+# This won't be used in the final guide, but I'm going to leave here for documentation purposes whilst I don't finish this.
 
 Ok, chapter two. I have tried again and again to use wayland, but as for now there are no guides to do it. Instead, I will try to use X11 with Archlinux, as it is described on [this](https://steamcommunity.com/sharedfiles/filedetails/?id=680514371) guide.
 
