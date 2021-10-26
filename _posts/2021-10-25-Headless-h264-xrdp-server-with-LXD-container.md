@@ -1,13 +1,13 @@
 ---
 layout: post
 title:  "Headless h264 xrdp server with LXD container and NVidia Drivers"
-date:  2021-10-13 11:49:18 -0300 
+date:  2021-10-25 20:58:18 -0300 
 categories: english linux
 ---
 
 # Headless h264 xrdp server with LXD container amd NVidia Drivers
 
-Another adventure of mine: I wanted to free some space on my desk. It's a small one, so my desktop takes too much space. I could move it to under the table, but there are a lot of cables and to organize things would take too much effort (yes, I am that kind of person). So what's the solution? All the way remote desktop! But there's a catch.
+Another adventure of mine: I wanted to free some space on my desk. It's a small one, so my desktop takes too much of it. I could move this pc to under the table, but there are a lot of cables and to organize things would take too much effort (yes, I am that kind of person). So what's the solution? All the way remote desktop! But there's a catch.
 
 I've been looking for a remote desktop protocol that was able to use accelerated graphics to stream things using h264 protocol (or something like that). But xrdp and all sorts of vnc implementation didn't do that. Until I've found [this](https://github.com/neutrinolabs/xrdp/issues/1422) feature request and decided to try it out.
 
@@ -26,6 +26,8 @@ export HOMEINCONTAINER=/home/marcocspc
 export PROXYDEVICERDP=rdp3389
 export PROXYDEVICERDPPORTHOST=3390
 export PROXYDEVICERDPPORTCNT=3389
+export NVIDIADRIVER_URL=https://us.download.nvidia.com/XFree86/Linux-x86_64/470.74/NVIDIA-Linux-x86_64-470.74.run
+export NVIDIAINSTALLER=$(basename $NVIDIADRIVER_URL)
 ```
 
 Now, we launch the container:
@@ -60,6 +62,7 @@ Let's mount nvidia stuff inside the container:
 ls -l /dev/nvidia*
 export CNT=$CONTAINER
 for i in $(ls /dev/nvidia*); do sudo lxc config device add $CNT $(basename $i) disk source=$i path=$i ; done
+sudo lxc config device add $CONTAINER mygpu gpu
 ```
 
 Start the container again:
@@ -71,15 +74,15 @@ sudo lxc start $CONTAINER
 Get the driver (answer Yes if the driver wants to override any config):
 
 ```
-sudo lxc exec $CONTAINER -- bash -c "mkdir ~/downloads && cd downloads && dnf install aria2 -y && aria2c -x 16 -s 16 https://us.download.nvidia.com/XFree86/Linux-x86_64/460.32.03/NVIDIA-Linux-x86_64-460.32.03.run && chmod +x NVIDIA-Linux-x86_64-460.32.03.run && ./NVIDIA-Linux-x86_64-460.32.03.run --no-kernel-module"
+sudo lxc exec $CONTAINER -- bash -c "mkdir ~/downloads && cd downloads && dnf install aria2 -y && aria2c -x 16 -s 16 $NVIDIADRIVER_URL && chmod +x ./$NVIDIAINSTALLER && ./$NVIDIAINSTALLER --no-kernel-module"
 ```
 
 ## Fedora Gnome Desktop
 
-We use Fedora desktop here, but feel free to apply the same principles to your dist of choice. We also install xrdp, since the hardware acceleration is given by xorgxrdp (which will be installed later).
+We use Xfc4 desktop here, but feel free to apply the same principles to your dist of choice. We also install xrdp, since the hardware acceleration is given by xorgxrdp (which will be installed later).
 
 ```
-sudo lxc exec $CONTAINER -- dnf install -y @gnome-desktop xrdp
+sudo lxc exec $CONTAINER -- dnf groupinstall -y Xfce\ desktop
 ```
 
 ## H264 Hardware-Accelarated XRDP
@@ -90,14 +93,19 @@ Let's now install the hardware acceleration. To do this, first we need to instal
 sudo lxc exec $CONTAINER -- dnf install -y git patch gcc make autoconf libtool automake pkgconfig openssl-devel gettext file pam-devel libX11-devel libXfixes-devel libXrandr-devel libjpeg-devel fuse-devel flex bison gcc-c++ libxslt perl-libxml-perl xorg-x11-font-utils nasm xorg-x11-server-devel xrdp-devel mesa-* libdrm-devel libepoxy-devel
 ```
 
+Now, let's now clone, build and install xrdp on the container:
+
+```
+sudo lxc exec $CONTAINER -- bash -c "git clone https://github.com/neutrinolabs/xrdp.git && cd xrdp && git checkout tags/v0.9.17"
+sudo lxc exec $CONTAINER -- bash -c "cd xrdp && ./bootstrap && ./configure --enable-glamor  && make && make install"
+```
+
 Now, let's now clone, build and install xorgxrdp on the container:
 
 ```
-#sudo lxc exec $CONTAINER -- bash -c "git clone --branch egfx --recursive https://github.com/jsorg71/xrdp.git && cd xrdp && ./bootstrap && ./configure --enable-x265 && make && make install"
-#sudo lxc exec $CONTAINER -- bash -c "git clone https://github.com/neutrinolabs/xorgxrdp && cd xorgxrdp && git checkout tags/v0.2.15 && ./bootstrap && ./configure XRDP_CFLAGS=/root/xrdp && make && make install"
-sudo lxc exec $CONTAINER -- bash -c "dnf search epoxy"
 sudo lxc exec $CONTAINER -- bash -c "git clone https://github.com/jsorg71/xorgxrdp/ --branch nvidia_hack --recursive"
 sudo lxc exec $CONTAINER -- bash -c "cp -r /usr/include/libdrm/* xorgxrdp/"
+sudo lxc exec $CONTAINER -- bash -c "for i in /usr/include/libdrm/* ln -s $i /usr/include/"
 sudo lxc exec $CONTAINER -- bash -c "cd xorgxrdp && ./bootstrap && ./configure --enable-glamor --enable-rfxcodec --enable-mp3lame --enable-fdkaac --enable-opus --enable-pixman --enable-fuse --enable-jpeg --includedir=/usr/include/  && make && make install"
 ```
 
@@ -159,8 +167,8 @@ port=-1
 code=20
 EOF
 )
-sudo lxc exec $CONTAINER -- bash -c "echo '$var' | tee -a /etc/xrdp/xrdp.ini"
-sudo lxc exec $CONTAINER -- tail /etc/xrdp/xrdp.ini
+sudo lxc exec $CONTAINER -- bash -c "echo '$var' >> /etc/xrdp/sesman.ini"
+sudo lxc exec $CONTAINER -- bash -c "tail /etc/xrdp/sesman.ini"
 ```
 
 Expose 3389 container's port:
@@ -169,16 +177,41 @@ Expose 3389 container's port:
 sudo lxc config device add $CONTAINER $PROXYDEVICERDP proxy listen=tcp:0.0.0.0:$PROXYDEVICERDPPORTHOST connect=tcp:127.0.0.1:$PROXYDEVICERDPPORTCNT
 ```
 
-Finally, enable gnome-session for your user:
+Finally, enable xfce4-session for your user:
 
 ```
-sudo lxc exec $CONTAINER -- echo "exec /usr/bin/gnome-session" >> "/home/$USERNAME/.xinitrc"
-sudo lxc exec $CONTAINER -- chown "$USERNAME:$USERNAME" "/home/$USERNAME/.xinitrc"
+sudo lxc exec $CONTAINER -- touch "/home/$USERNAME/.xsession"
+sudo lxc exec $CONTAINER -- bash -c "echo '/usr/bin/xfce4-session' >> /home/$USERNAME/.xsession"
+sudo lxc exec $CONTAINER -- chown "$USERNAME:$USERNAME" "/home/$USERNAME/.xsession"
+sudo lxc exec $CONTAINER -- chmod +x "/home/$USERNAME/.xsession"
+sudo lxc exec $CONTAINER -- tail "/home/$USERNAME/.xsession"
 sudo lxc exec $CONTAINER -- systemctl set-default graphical.target
 sudo lxc exec $CONTAINER -- bash -c "systemctl enable xrdp"
 sudo lxc restart $CONTAINER
 ```
 
-## TODO
+Allow anyone to connect to RDP:
 
-I've modified sesman.ini to use xrdp/nvidia_xorg.conf instead of xrdp/xorg.conf (default). It works while connecting on vnc session (using remmina with default settings), but not with xorg session. Next time, I will compare both nvidia_xorg.conf and xorg.conf to see if I can get something to work by changeing these files.
+```
+sudo lxc exec $CONTAINER -- touch "/etc/X11/Xwrapper.config"
+sudo lxc exec $CONTAINER -- bash -c "echo 'allowed_users = anybody' >> /etc/X11/Xwrapper.config"
+```
+
+## Connecting
+
+You can connect using Remmina and test it! It should work. Remember to set the connection to *Xorg* at the xrdp login dialog, otherwise you won't be using your gpu to render 3d graphics.
+
+If you want to make sure you're using your gpu, run "glxspheres64". It will show you the renderer (should be different than llvm etc) and run at a lot of fps (mine was 4000 fps avg using gtx 1060).
+
+Finally I will be able to get my desktop ou of my desk and get it to another room.
+
+## DEBUG
+
+If you need to debug, these commands should output you important logs:
+
+```
+sudo lxc exec $CONTAINER -- bash -c "less /var/log/xrdp.log"
+sudo lxc exec $CONTAINER -- bash -c "less /var/log/xrdp-sesman.log"
+sudo lxc exec $CONTAINER -- bash -c "cat /home/$USERNAME/.xorgxrdp.10.log"
+```
+

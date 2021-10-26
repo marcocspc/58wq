@@ -115,6 +115,12 @@ dnf install https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$
 dnf install sway wayvnc steam -y
 ```
 
+To have audio on our stream (and even make some games run, since they won't if there is no audio output) we need to install pulseaudio. For some reason, Fedora 34 have some conflicts between pipewire and pulseaudio, so we remove the former and install the latter:
+
+```
+dnf remove -y pipewire 
+dnf install -y pulseaudio
+```
 
 Before we proceed, we should do some tests to see if everything is okay. Add your user and exit:
 
@@ -493,8 +499,4 @@ sudo lxc config device add $CONTAINER vnc5900 proxy listen=tcp:0.0.0.0:5900 conn
 ```
 
 #TODO test if x11vnc + startxfce4 is working
-#TODO create service files
-#TODO change monitor resolution
-#TODO login into steam
-#TODO start steam automatically when launching xfce
 #TODO mount already existing steam library into the users homefolder
