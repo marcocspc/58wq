@@ -11,7 +11,7 @@ This one should be simple and quick. My idea is to create a Container which woul
 
 Also each user should be able to see only it's own folder, so the home directory is mounted inside the external HDD.
 
-## Getting started
+## Let us go
 
 First of all the external HDD should be connected to the host. All the commands listed below are ran on it, so no `lxc shell` around here, unless it's strictly necessary.
 
