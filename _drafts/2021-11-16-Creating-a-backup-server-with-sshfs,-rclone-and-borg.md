@@ -7,7 +7,7 @@ categories: english linux
 
 # Creating a backup server with lxd, ssh, rclone and borg 
 
-In portuguese, when we finally start to do something we've been procrastinating, we say that "I finally drank shame on my face". In English it surely do not sound the same way as in portuguese, but in a single word it should mean "finally". And by finally I mean that I'm going to automate my backups using Borg.
+In portuguese, when we finally start to do something we've been procrastinating, we say that "I finally drank shame on my face". In English it surely does not sound the same way as in portuguese, but in a single word it should mean "finally". And by finally I mean that I'm going to automate my backups using Borg.
 
 At my job a already use BareOS to make these tasks, but it is a little too much for what I'm trying to accomplish here. BareOS/Bacula is a powerful tool, but too complex to manage, in my opinion. I want something simple, like rsync. But this one does not have support for encryption natively, so I've stumbled upon Borg recently. 
 
