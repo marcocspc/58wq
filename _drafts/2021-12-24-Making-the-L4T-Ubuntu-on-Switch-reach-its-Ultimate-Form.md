@@ -23,13 +23,13 @@ Oh, and I won't stop using Android. Ubuntu will only replace my Android setup if
 ```
 export UBUNTU_IMAGE_LINK=https://download.switchroot.org/ubuntu/switchroot-ubuntu-3.4.0-2021-07-23-v2.7z
 export UBUNTU_COMPRESSED_FILENAME=(basename $UBUNTU_IMAGE_LINK)
-export SDCARD=/dev/mmcblk0
-export SDCARDPARTITION=$SDCARDp1
-export SDCARDMOUNTDIRECTORY=/mnt
+export SDCARD=/deb/sdb
+export SDCARDPARTITION="$SDCARD"1
+export SDCARDMOUNTDIRECTORY=/media/marcocspc/SWITCHROOT
 export SDCARDBACKUPDIR=/backup
 export HEKATE_LINK=https://github.com/CTCaer/hekate/releases/download/v5.6.5/hekate_ctcaer_5.6.5_Nyx_1.1.1.zip
 export HEKATE_FILE=$(basename $HEKATE_LINK)
-export HEKATE_DEST_FOLDER=$SDCARDMOUNTDIRECTORY/argon
+export HEKATE_DEST_FOLDER="$SDCARDMOUNTDIRECTORY"/argon
 export BASEDIR=/home/marcocspc/Downloads
 ```
 
@@ -100,27 +100,54 @@ Next, launch Ubuntu so it can make its initial set up. Return to the home screen
 
 ## LVM All The Way!
 
-I've decided to use LVM because of its hability to create snapshots. I cannot count how many times I screwed my Ubuntu installation because of some minor change. This way I can roll back if anything gets out of order.
+I've decided to use LVM because of its ability to create snapshots. I cannot count how many times I screwed my Ubuntu installation because of some minor change. This way I can roll back if anything gets out of order.
 
-When the switch boots into Ubuntu for the first time, it will be wise to install SSH and LVM, so we can use those later. For now we will only need these installed. Run these commands *on the switch*:
+When the switch boots into Ubuntu for the first time, connect to wi-fi. We need to install SSH and LVM, so we can use those to access the switch remotely and configure the kernel to boot into lvm later. I recommend the usage of a keyboard at this moment, it will make easier to type commands.
 
 ```
 sudo apt update
 sudo apt install lvm2 ssh -y
 ```
 
+After this, we get the switch IP:
+
+```
+ip a s dev wlp10
+```
+
+Then go to your desktop and connect to it:
+
+```
+ssh your-username@your-switch-ip
+```
+
+You will get a remote terminal. Let's install sysmonitor indicator to make it easy view the ip next time. Still from your desktop, do:
+
+```
+sudo apt install git jq -y
+cd ~/Downloads
+git clone https://github.com/fossfreedom/indicator-sysmonitor
+cd indicator-sysmonitor
+sudo make install 
+cat << EOF > ~/.indicator-sysmonitor.json
+{"custom_text": "cpu: {cpu} mem: {mem} wifi-ip: {ip-wifi}", "interval": 2.0, "on_startup": false, "sensors": {"cpu\\d*": ["Average CPU usage", true], "nvgpu": ["Nvidia GPU utilization", true], "mem": ["Physical memory in use.", true], "net": ["Network activity.", true], "netcomp": ["Network activity in Compact form.", true], "totalnet": ["Total Network activity.", true], "bat\\d*": ["Battery capacity.", true], "fs//.+": ["Available space in file system.", true], "swap": ["Average swap usage", true], "upordown": ["Display if your internet connection is up or down", true], "publiccountry": ["Display your public country", true], "publiccountryiso": ["Display your public country ISO code", true], "publicip": ["Display your public IP address", true], "cputemp": ["CPU temperature", true], "nvgputemp": ["Nvidia GPU Temperature", true], "ip-wifi": ["Shows SWITCH ip when connected to wifi.", "ip a s dev wlp1s0 | grep inet | head -1 | awk '{ print $2 }'"]}}
+EOF
+```
+
+There was one last command that should solve the part of starting once you login. But it is needed to do it manually. Go to your switch and click on the Ubuntu icon (top left of the screen). Write Startup Applications and click on it once it shows up. Touch on Add, put the name "Indicator Sysmonitor" and put as command "/usr/bin/indicator-sysmonitor". Reboot the switch and login again to see if it works.
+
 Then shutdown. Remove the sd card and bring back to your linux pc. Now we are going to backup our setup so we can install lvm and copy the files back. You have two ways of proceeding to do this:
 
 1- Copy the files to a safe location;
 2- Make a full bit level dd backup.
 
-Here I'm going to take the second approach. I like to do this way because I can ensure files and perissions are preserved. Anyway, you should do as follows:
+Here I'm going to take the second approach. I like to do this way because I can ensure files and permissions are preserved. Anyway, you should do as follows:
 
 ```
 dd if=$SDCARD of=$SDCARDBACKUPDIR bs=4M
 ```
 
-PS: If you want to see the progess of this command (it *will* take a while) install pv and put it in the middle: `dd if=$SDCARD bs=4M | pv | of=$SDCARDBACKUPDIR`.
+PS: If you want to see the progress of this command (it *will* take a while) install pv and put it in the middle: `dd if=$SDCARD bs=4M | pv | of=$SDCARDBACKUPDIR`.
 
 With the backup in place, now we can reformat our sd card. Do it the way suits you more, the only thing you need to know is that you have to completely erase ubuntu partition (the second one) and replace it with an empty (non-formatted) partition. The LVM volume will be built on top of this partition, then we copy the files from the backup when done.
 
@@ -193,4 +220,6 @@ sudo rsync -ah --progress /mnt/backup1/* /mnt/restore1
 sudo rsync -ah --progress /mnt/backup2/* /mnt/restore2
 ```
 
-TODO: Apparently, l4t ubuntu uses a coreboot to boot the kernel that is in the /boot dir. But this dir is inside the lvm partition. So I think I need to make /boot on another partition and then change the kernel boot options to start lvm and boot mount the root partition.
+TODO: 
+HYPOTHESIS 1: There's a iniramfs inside sd/switchroot/ubuntu, this is what should be loaded by coreboot. So, by setting some kernel params, this initramfs should be able to load lvm. If not, I can try to generate a new one with support for it.
+HYPOTHESIS 2: Apparently, l4t ubuntu uses a coreboot to boot the kernel that is in the /boot dir. But this dir is inside the lvm partition. So I think I need to make /boot on another partition and then change the kernel boot options to start lvm and boot mount the root partition.

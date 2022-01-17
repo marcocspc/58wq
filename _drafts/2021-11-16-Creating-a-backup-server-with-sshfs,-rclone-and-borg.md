@@ -31,7 +31,6 @@ I start by creating a container (see bellow) and following [this guide](https://
 export IMAGE=ubuntu:20.04
 export CONTAINER=kibo
 export CONTAINERTOBACKUP=apollo12
-export BACKUPORIGIN=/etc/wireguard
 export BKPUSERNAME=borgbackup
 export RCLONEDOWNLOAD=https://downloads.rclone.org/rclone-current-linux-arm.zip
 export RCLONEPKG=$(basename $RCLONEDOWNLOAD)
@@ -89,7 +88,7 @@ Next remove the proxy device, as we won't need it anymore:
 sudo lxc config device rm $CONTAINER temprclone 
 ```
 
-Now mount let's config rclone to automount our drive folder at boot. Create a systemd service file:
+Now let's config rclone to automount our drive folder at boot. Create a systemd service file:
 
 ```
 sudo lxc exec $CONTAINER -- bash -c "cat <<EOF > /etc/systemd/system/rclonegdrive.service
@@ -103,7 +102,7 @@ Wants=network-online.target
 User=$BKPUSERNAME
 Group=$BKPUSERNAME
 Type=simple
-ExecStart=/usr/bin/rclone mount --daemon googledrive:/ /home/$BKPUSERNAME/gdrivebackup
+ExecStart=/usr/bin/rclone mount --daemon --allow-other googledrive:/ /home/$BKPUSERNAME/gdrivebackup
 ExecStop=/bin/fusermount -u /home/$BKPUSERNAME/gdrivebackup
 Restart=always
 RestartSec=10
@@ -113,10 +112,29 @@ WantedBy=default.target
 EOF"
 ```
 
-Enable and start it:
+Allow all users to use the "allow-other" flag (a reboot is needed):
+
+```
+sudo lxc exec $CONTAINER -- bash -c "echo user_allow_other >> /etc/fuse.conf"
+sudo lxc restart $CONTAINER 
+```
+
+Enable and start the service:
 
 ```
 sudo lxc exec $CONTAINER -- bash -c "systemctl enable rclonegdrive && systemctl start rclonegdrive"
 ```
 
+## The sshfs folder
 
+So, besides serving a drive folder to store the backups remotely, I can also have one folder mounted via sshfs. I also document this way of connecting to a remote server mainly because this will serve as my local backup, since my sshfs server is on my local network.
+
+First, create a backup share on your server using [my tutorial](https://marcocspc.github.io/58wq/english/linux/lxd/2021/12/03/SSH-File-Server-on-a-LXD-Container.html). After this, we go and mount this shared folder in our backup directory. To do this, we need sshfs, so install this on your backup server:
+
+```
+
+```
+
+## Borg Server
+
+Now that we have our 
