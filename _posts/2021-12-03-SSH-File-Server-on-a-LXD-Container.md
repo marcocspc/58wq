@@ -91,7 +91,7 @@ sudo lxc exec $CONTAINER -- systemctl enable sshd
 sudo lxc exec $CONTAINER -- systemctl start sshd
 ```
 
-Before finally finishing, we need to lock each user to its home. Add the following lines to the ssh server config file:
+Lock each user to its home. Add the following lines to the ssh server config file:
 
 ```
 sudo lxc exec $CONTAINER -- sed -i '\/usr\/libexec\/openssh\/sftp-server/c\#Subsystem sftp \/usr\/libexec\/openssh\/sftp-server' /etc/ssh/sshd_config
@@ -102,6 +102,7 @@ Subsystem sftp /usr/lib/openssh/sftp-server
     ForceCommand internal-sftp
     X11Forwarding no
     AllowTcpForwarding no
+    AuthorizedKeysFile  /sftp/%u/authorized_keys
 EOF"
 ```
 
@@ -127,6 +128,26 @@ If needed, you can set permissions for your username on its home:
 
 ```
 sudo lxc exec $CONTAINER -- chown -R $CLIENT_USER:$CLIENT_USER /mnt/$CLIENT_USER
+```
+
+## SSH Key Authentication
+
+You may have seen that we changed the AuthorizedKeysFile directive under sftp options in the sshd_config file. This is needed because of the permission structure needed to make sftp chroot jail work. Because every user home must be owned by root, when adding a key to an authorized keys file will result in a permission denied error when sshd tries to read that file. What we need to do then is put every authorized_keys file on another directory owned by the user trying to login. As we already have set up above, all authorized_keys files will be in /sftp/USER directory.  It is easy-peasy to do this then. Create the directory for your user:
+
+```
+mkdir -p /sftp/$CLIENT_USER
+```
+
+Create the authorized keys file and add the public key inside it:
+
+```
+echo "PUBLIC_KEY LINE" >> /sftp/$CLIENT_USER/authorized_keys
+```
+
+Set the right permissions:
+
+```
+chown -R $CLIENT_USER:$CLIENT_USER /sftp/$CLIENT_USER
 ```
 
 And... We're done!
