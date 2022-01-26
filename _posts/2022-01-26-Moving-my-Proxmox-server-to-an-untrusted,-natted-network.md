@@ -1,13 +1,13 @@
 ---
 layout: post
 title:  "Moving my Proxmox server to an untrusted, natted network"
-date:  2022-01-24 16:01:26 -0300 
+date:  2022-01-26 16:01:26 -0300 
 categories: english linux proxmox 
 ---
 
 # Moving my Proxmox server to an untrusted, natted network 
 
-What happened? I wanted to get my server to my brother's house. There, it would sit comfortable in his LAN. But as this server provides me some valuable services with sensitive data, I wanted to protect it as much as I could. I wanted to set up encryption on it's partitions, but that's gonna be in another episode.
+What happened? Well, I wanted to get my server to my brother's house. There, it would sit comfortable in his LAN. But as this server provides me some valuable services with sensitive data, I wanted to protect it as much as I could. I wanted to set up encryption on it's partitions, but that's gonna be in another episode.
 
 Now, in this document, I want to focus on network security. So what are my objectives?
 
@@ -49,7 +49,7 @@ systemctl start wg-quick@wg0
 
 ## Put vmbr0 to get IP via DHCP
 
-Since we are going to access our server via wireguard, I don't need to worry about it's IP in my brother's network (neither should I bother him with this). So here I set vmbr0 to get its IP via DHCP. First, copy the old configuration so you can easily rollback if needed:
+Since I'm going to access my server via wireguard, I don't need to worry about it's IP in my brother's network (neither should I bother him with this). So here I set vmbr0 to get its IP via DHCP. First, copy the old configuration so you can easily rollback if needed:
 
 ```
 cp /etc/network/interfaces /etc/network/interfaces.bak
@@ -74,7 +74,7 @@ iface vmbr0 inet dhcp
 
 ## Make all VMs natted
 
-Nating via Wireguard depends on how you have set up the interface. Check [here](https://gist.github.com/nealfennimore/92d571db63404e7ddfba660646ceaf0d) to see  quick how-to. Since we are already with wireguard working, I will focus here on how to create a second bridge to isolate the VMs from the main lan.
+Natting via Wireguard depends on how you have set up the interface in the client and on how you have set your server nat configuration. Check [here](https://gist.github.com/nealfennimore/92d571db63404e7ddfba660646ceaf0d) to see a quick how-to. Since we are already with wireguard working, I will focus here on how to create a second bridge to isolate the VMs from the main lan.
 
 *Append* these lines to /etc/network/interfaces:
 
@@ -92,7 +92,7 @@ iface vmbr1 inet static
 
 ```
 
-*Make sure* that your wireguard interfaces has got the right name in the iptables command. As mine was not wg0, it wasn't working until a fixed the name.
+*Make sure* that your wireguard interface has got the right name in the iptables command. As mine was not wg0, it wasn't working until I fixed the name.
 
 Now on every VM you have, configure your IP to be in the same subnetwork as vmbr1. My Windows VM, for example, I have put the IP 192.168.1.2, netmask 255.255.255.0 and gateway to 192.168.1.1. As DNS I used my Wireguard server. Remember to set your NIC to use the vmbr1 bridge in your guest VM. 
 
@@ -105,7 +105,7 @@ netsh interface ipv4 set dns name="INTERFACE_NAME" static 8.8.8.8
 
 ## Block all connections on vmbr0
 
-Just add this on vmbr0 interface configuration:
+Just add this to vmbr0 interface configuration:
 
 ```
 post-up iptables -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
@@ -114,7 +114,13 @@ post-up iptables -A INPUT -i vmbr0 -j DROP
 
 ## Expose VM port
 
-For every vm that needs a port exposed, run this command:
+For every vm that needs a port exposed, run this command for tcp connections:
+
+```
+iptables -t nat -A PREROUTING -d YOUR-WIREGUARD-IP/32 -p tcp -m tcp --dport HOST-PORT -j DNAT --to-destination YOUR-VM-IP:YOUR-VM-PORT
+```
+
+For udp, run this:
 
 ```
 iptables -t nat -A PREROUTING -d YOUR-WIREGUARD-IP/32 -p tcp -m tcp --dport HOST-PORT -j DNAT --to-destination YOUR-VM-IP:YOUR-VM-PORT
