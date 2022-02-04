@@ -1,11 +1,11 @@
 ---
 layout: post
-title:  "Installing TurboVNC and securing it behind SSH"
+title:  "Installing TurboVNC and securing it using VeNCrypt"
 date:  2022-02-04 13:47:48 UTC00 
 categories: english linux turbovnc
 ---
 
-# Installing TurboVNC and securing it behind SSH 
+# Installing TurboVNC and securing it VeNCrypt
 
 I needed remote access to an Elementary OS host, this was my setup to have a remote access to it. A nice thing about TurboVNC is that it has encryption builtin, so you don't need to protect it via an SSH tunnel.
 
@@ -92,7 +92,7 @@ Type=forking
 User=$USERNAME
 Group=$USERNAME
 Environment=DISPLAY=:1
-ExecStart=/opt/TurboVNC/bin/vncserver -vgl 
+ExecStart=/opt/TurboVNC/bin/vncserver -vgl -nohttpd
 ExecStop=/opt/TurboVNC/bin/vncserver -kill :1
 
 [Install]
@@ -137,7 +137,7 @@ If you're tying to connect in iOS (as was I), use bVNC pro as it is the only cli
 
 If you do not want to use it, I recommend disabling all the encryption by replacing the line `ExecStart=/opt/TurboVNC/bin/vncserver -vgl` with `ExecStart=/opt/TurboVNC/bin/vncserver -vgl -securitytypes None` in `/etc/systemd/system/turbovnc.service`. This is needed because TurboVNC does not allow "None" to be used in the `/etc/turbovncserver-security.conf` file.
 
-Also, I should recommend disabling direct connections from hosts and allowing only via SSH Tunnel. To do this, edit the same line from `/etc/systemd/system/turbovnc.service`, setting ExecStart to `ExecStart=/opt/TurboVNC/bin/vncserver -vgl -securitytypes None -localhost`. This will effectively only allow connections incoming from SSH tunnels.
+Also, I should recommend disabling direct connections from hosts and allowing only via SSH Tunnel. To do this, edit the same line from `/etc/systemd/system/turbovnc.service`, setting ExecStart to `ExecStart=/opt/TurboVNC/bin/vncserver -vgl -securitytypes None -localhost -nohttpd`. This will effectively only allow connections incoming from SSH tunnels. You also need to remove any security customization done on this tutorial, either by commenting the line `permitted-security-types = TLSPlain, X509Plain` in the file `/etc/turbovncserver-security.conf`, or by removing it completely.
 
 It is also important to point out that I did NOT test this setup, so you should read the references below if anything goes wrong.
 
