@@ -224,4 +224,4 @@ TODO:
 HYPOTHESIS 1: There's a iniramfs inside sd/switchroot/ubuntu, this is what should be loaded by coreboot. So, by setting some kernel params, this initramfs should be able to load lvm. If not, I can try to generate a new one with support for it.
 HYPOTHESIS 2: Apparently, l4t ubuntu uses a coreboot to boot the kernel that is in the /boot dir. But this dir is inside the lvm partition. So I think I need to make /boot on another partition and then change the kernel boot options to start lvm and boot mount the root partition.
 
-Util: this link shows l4t boot process and talks avout extlinux.conf which may help setup where the partition ewill be. also shows how to geberate a new iniranfs. so maybe you should try lvm again before testing brtfs
+Util: this link shows l4t boot process and talks avout extlinux.conf which may help setup where the partition ewill be. also shows how to geberate a new iniranfs. so maybe you should try lvm again before testing brtfs. Link: https://forums.developer.nvidia.com/t/can-move-my-root-partition-to-a-btrfs-subvolume/179276
