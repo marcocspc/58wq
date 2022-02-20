@@ -124,7 +124,25 @@ For udp, run this:
 
 ```
 iptables -t nat -A PREROUTING -d YOUR-WIREGUARD-IP/32 -p tcp -m tcp --dport HOST-PORT -j DNAT --to-destination YOUR-VM-IP:YOUR-VM-PORT
+iptables -t nat -A PREROUTING -p udp -i YOUR-WIREGUARD-INTERFACE -d YOUR-WIREGUARD-IP --dport HOST-PORT -j DNAT --to-destination YOUR-VM-IP:YOUR-VM-PORT
 ```
+TCP: 47995, 47984, 47989, 48010
+iptables -t nat -A PREROUTING -d 10.111.112.6/32 -p tcp -m tcp --dport 47995 -j DNAT --to-destination 192.168.1.2:47995
+iptables -t nat -A PREROUTING -d 10.111.112.6/32 -p tcp -m tcp --dport 47984 -j DNAT --to-destination 192.168.1.2:47984
+iptables -t nat -A PREROUTING -d 10.111.112.6/32 -p tcp -m tcp --dport 47989 -j DNAT --to-destination 192.168.1.2:47989
+iptables -t nat -A PREROUTING -d 10.111.112.6/32 -p tcp -m tcp --dport 48010 -j DNAT --to-destination 192.168.1.2:48010
+
+UDP: 47998, 48000, 47999, 48010, 47995, 48000, 48002, 5353
+iptables -t nat -A PREROUTING -p udp -i desktopcasa -d 10.111.112.6 --dport 47998 -j DNAT --to-destination 192.168.1.2:47998
+iptables -t nat -A PREROUTING -p udp -i desktopcasa -d 10.111.112.6 --dport 48000 -j DNAT --to-destination 192.168.1.2:48000
+iptables -t nat -A PREROUTING -p udp -i desktopcasa -d 10.111.112.6 --dport 47999 -j DNAT --to-destination 192.168.1.2:47999
+iptables -t nat -A PREROUTING -p udp -i desktopcasa -d 10.111.112.6 --dport 48010 -j DNAT --to-destination 192.168.1.2:48010
+iptables -t nat -A PREROUTING -p udp -i desktopcasa -d 10.111.112.6 --dport 47995 -j DNAT --to-destination 192.168.1.2:47995
+iptables -t nat -A PREROUTING -p udp -i desktopcasa -d 10.111.112.6 --dport 48000 -j DNAT --to-destination 192.168.1.2:48000
+iptables -t nat -A PREROUTING -p udp -i desktopcasa -d 10.111.112.6 --dport 48002 -j DNAT --to-destination 192.168.1.2:48002
+iptables -t nat -A PREROUTING -p udp -i desktopcasa -d 10.111.112.6 --dport 5353 -j DNAT --to-destination 192.168.1.2:5353
+
+
 
 And we're done!
 
