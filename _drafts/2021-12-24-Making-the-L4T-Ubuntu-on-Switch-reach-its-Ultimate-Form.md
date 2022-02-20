@@ -7,11 +7,11 @@ categories: english linux ubuntu
 
 # Making the L4T Ubuntu on Switch reach its Ultimate Form 
 
-I was using Android on my switch. I love that platform because I have turned my switch into a final portable streaming platform, but I've met some problems along the way. First of all, I could not make the pro controller ZL and ZR buttons work on the xcloud app, so I thought I could circumvent this on Ubuntu. Second, I feel that I never have full control over the OS when using android. So I decided to return to L4T Ubuntu and create something that I could have full control.
+I was using Android on my switch. I love that platform because it have turned my switch into a final portable streaming device, but I've met some problems along the way. First of all, I could not make the pro controller ZL and ZR buttons work on the xcloud app, so I thought I could circumvent this on Ubuntu. Second, I feel that I never have full control over the OS when using android. So I decided to return to L4T Ubuntu and create something that I could have full control.
 
 Some points that I'd like to achieve:
 
-1- Make L4T Ubuntu work with LVM (so I can make snapshots of the filesystem);
+1- Make L4T Ubuntu work with BTRFS (so I can make snapshots of the filesystem);
 2- To have several ways of controlling it (via SSH, VNC over SSH, using the joycons, pro controller, etc);
 3- Install the latest version of chromium with hardware accelaration and support for widevine, so I can watch netflix and other streaming services;
 4- Install wireguard, so it will always be on my home network wherever I go.
@@ -21,16 +21,16 @@ Oh, and I won't stop using Android. Ubuntu will only replace my Android setup if
 ## Export some variables
 
 ```
+export BASEDIR=/home/marcocspc/Downloads
 export UBUNTU_IMAGE_LINK=https://download.switchroot.org/ubuntu/switchroot-ubuntu-3.4.0-2021-07-23-v2.7z
-export UBUNTU_COMPRESSED_FILENAME=(basename $UBUNTU_IMAGE_LINK)
-export SDCARD=/deb/sdb
+export UBUNTU_COMPRESSED_FILENAME=$(basename $UBUNTU_IMAGE_LINK)
+export SDCARD=/dev/sdb
 export SDCARDPARTITION="$SDCARD"1
 export SDCARDMOUNTDIRECTORY=/media/marcocspc/SWITCHROOT
-export SDCARDBACKUPDIR=/backup
+export SDCARDBACKUPDIR="$BASEDIR"/backup
 export HEKATE_LINK=https://github.com/CTCaer/hekate/releases/download/v5.6.5/hekate_ctcaer_5.6.5_Nyx_1.1.1.zip
 export HEKATE_FILE=$(basename $HEKATE_LINK)
 export HEKATE_DEST_FOLDER="$SDCARDMOUNTDIRECTORY"/argon
-export BASEDIR=/home/marcocspc/Downloads
 ```
 
 ## Basic setup
@@ -40,7 +40,7 @@ First of all, have a Linux pc with an sd card reader. You will need to format th
 Mount the sd card:
 
 ```
-mount $SDCARDPARTITION $SDCARDMOUNTDIRECTORY
+sudo mkdir -p $SDCARDMOUNTDIRECTORY && sudo mount $SDCARDPARTITION $SDCARDMOUNTDIRECTORY
 ```
 
 Download and copy the most recent version of hekate and copy it to the sd card.
@@ -48,13 +48,13 @@ Download and copy the most recent version of hekate and copy it to the sd card.
 ```
 cd $BASEDIR
 wget $HEKATE_LINK
-mkdir hekate && cd hekate
+mkdir -p hekate && cd hekate
 cp ../$HEKATE_FILE .
 unzip $HEKATE_FILE
-rm $HEKATE_FILE
-mkdir -p $HEKATE_DEST_FOLDER
-cp -r *bin $HEKATE_DEST_FOLDER
-cp -r * $SDCARDMOUNTDIRECTORY
+sudo rm $HEKATE_FILE
+sudo mkdir -p $HEKATE_DEST_FOLDER
+sudo cp -r *bin $HEKATE_DEST_FOLDER
+sudo cp -r * $SDCARDMOUNTDIRECTORY
 ```
 
 PS: If your rcm jig uses the argon folder remember to rename hekate_ctcaer_x.x.x.bin to payload.bin!
@@ -72,24 +72,26 @@ wget $UBUNTU_IMAGE_LINK
 After the download is finished, mount the sd card again:
 
 ```
-mount $SDCARDPARTITION $SDCARDMOUNTDIRECTORY
+sudo mount $SDCARDPARTITION $SDCARDMOUNTDIRECTORY
 ```
 
 Extract the downloaded file:
 
 ```
 cd $BASEDIR
-mkdir extract && cd extract
+mkdir -p extract && cd extract
 cp ../$UBUNTU_COMPRESSED_FILENAME .
 7z x $UBUNTU_COMPRESSED_FILENAME
-rm $UBUNTU_COMPRESSED_FILENAME
+sudo rm $UBUNTU_COMPRESSED_FILENAME
 ```
 
 Copy the two extracted folders to the sd card:
 
 ```
+sudo umount $SDCARDPARTITION
+sudo mount $SDCARDPARTITION $SDCARDMOUNTDIRECTORY
 cd $BASEDIR/extract
-cp -r * $SDCARDMOUNTDIRECTORY
+sudo cp -r * $SDCARDMOUNTDIRECTORY
 ```
 
 Then get the sd card into the switch and boot hekate again, once it loads tap (on the bottom of the screen) Nyx Options > Dump Joy-Con BT. This will make joy-con connecting/disconnecting from the switch a joy.
@@ -98,15 +100,13 @@ Then return to the home screen and go to Tools > Partition SD Card. Press OK and
 
 Next, launch Ubuntu so it can make its initial set up. Return to the home screen and go to More Configs > L4T Ubuntu Bionic. This will start Ubuntu installation, set it up as you would on any PC installation. You *WILL NEED* a keyboard during this process, to set up wi-fi and enter your username, etc. Put your switch in the dock, plug an USB keyboard and an external monitor to view the screen. You may also use a usb mouse, but you can quickly remove from the dock and touch the screen if you need to click on something. When you're done, get to the next chapter. 
 
-## LVM All The Way!
+## Make our life easier
 
-I've decided to use LVM because of its ability to create snapshots. I cannot count how many times I screwed my Ubuntu installation because of some minor change. This way I can roll back if anything gets out of order.
-
-When the switch boots into Ubuntu for the first time, connect to wi-fi. We need to install SSH and LVM, so we can use those to access the switch remotely and configure the kernel to boot into lvm later. I recommend the usage of a keyboard at this moment, it will make easier to type commands.
+When the switch boots into Ubuntu for the first time, connect to wi-fi. We need to install SSH so it is easier for us to set things up. I recommend the usage of a keyboard at this moment, it will make easier to type commands. But you can also do this using the on-screen keyboard. Anyway, press Ctrl-Alt-T to open a terminal and type:
 
 ```
 sudo apt update
-sudo apt install lvm2 ssh -y
+sudo apt install ssh -y
 ```
 
 After this, we get the switch IP:
@@ -124,104 +124,480 @@ ssh your-username@your-switch-ip
 You will get a remote terminal. Let's install sysmonitor indicator to make it easy view the ip next time. Still from your desktop, do:
 
 ```
-sudo apt install git jq -y
+sudo apt install git jq python3-pip -y
+pip3 install psutil —user
 cd ~/Downloads
 git clone https://github.com/fossfreedom/indicator-sysmonitor
 cd indicator-sysmonitor
 sudo make install 
-cat << EOF > ~/.indicator-sysmonitor.json
-{"custom_text": "cpu: {cpu} mem: {mem} wifi-ip: {ip-wifi}", "interval": 2.0, "on_startup": false, "sensors": {"cpu\\d*": ["Average CPU usage", true], "nvgpu": ["Nvidia GPU utilization", true], "mem": ["Physical memory in use.", true], "net": ["Network activity.", true], "netcomp": ["Network activity in Compact form.", true], "totalnet": ["Total Network activity.", true], "bat\\d*": ["Battery capacity.", true], "fs//.+": ["Available space in file system.", true], "swap": ["Average swap usage", true], "upordown": ["Display if your internet connection is up or down", true], "publiccountry": ["Display your public country", true], "publiccountryiso": ["Display your public country ISO code", true], "publicip": ["Display your public IP address", true], "cputemp": ["CPU temperature", true], "nvgputemp": ["Nvidia GPU Temperature", true], "ip-wifi": ["Shows SWITCH ip when connected to wifi.", "ip a s dev wlp1s0 | grep inet | head -1 | awk '{ print $2 }'"]}}
-EOF
 ```
 
-There was one last command that should solve the part of starting once you login. But it is needed to do it manually. Go to your switch and click on the Ubuntu icon (top left of the screen). Write Startup Applications and click on it once it shows up. Touch on Add, put the name "Indicator Sysmonitor" and put as command "/usr/bin/indicator-sysmonitor". Reboot the switch and login again to see if it works.
+To show the wifi ip unfortunately we have to go to the switch. First, launch indicator-sysmonitor by clicking on Ubuntu logo (top-left) and typing "indicator" on the search bar. The app should be the first listed. You will see that there is a text on the top menu bar showing the cpu and the memory usage, tap it, then click Preferences.
 
-Then shutdown. Remove the sd card and bring back to your linux pc. Now we are going to backup our setup so we can install lvm and copy the files back. You have two ways of proceeding to do this:
+First check "Run at startup", and then go to the Advanced tab. Click on new. Put "wifiip" in the Sensor field, type something on the description and put "ip a s dev wlp1s0 | grep inet | head -1 | awk '{print $2 }'" in the Command field. Hit OK. Then go to "Customize Output and type: "wifi ip: {wifiip}. Hit save, that should do it.
+
+## BTRFS All The Way!
+
+OK, now to the BTRFS part. First we need to create one file and edit another so we avoid some errors before installing lvm2. First, login into the switch again via ssh. Run the following command to create and write the contents to /etc/initramfs-tools/conf.d/noresume.conf:
+
+```
+sudo bash -c "cat << EOF > /etc/initramfs-tools/conf.d/noresume.conf
+# Disable resume (this system has no swap)
+RESUME=none
+EOF"
+```
+
+Then we need to edit /etc/fstab to use UUID instead of /dev/root. First backup it:
+
+```
+sudo cp /etc/fstab /etc/fstab.bak
+```
+
+Then get the UUID for the root partition:
+
+```
+sudo blkid | grep ext4
+```
+
+Copy the UUID, then edit fstab:
+
+```
+sudo vim /etc/fstab
+```
+
+Replace /dev/root with UUID=xxxxxxxxx (yes, without the quotes). Now we should be able to install BTRFS2:
+
+```
+sudo apt install lvm2 btrfs-progs -y
+```
+
+After this, we need to edit one last file. Backup it first:
+
+```
+sudo cp /boot/extlinux/extlinux.conf /boot/extlinux/extlinux.conf.bak
+```
+
+Then edit it:
+
+```
+sudo vim /boot/extlinux/extlinux.conf
+```
+
+Replace the line "INITRD /boot/initrd" with "INITRD /boot/initrd.img". Save and reboot the switch to check wether it still boots normally. If yes, shutdown the switch, we will take the sd card and use a linux pc to setup the lvm partition.
+
+We are going to backup our setup so we can copy the files back later. You have three ways of proceeding to do this:
 
 1- Copy the files to a safe location;
-2- Make a full bit level dd backup.
+2- Make a full bit level dd backup;
+3- Use fsarchiver to do a partition level backup.
 
-Here I'm going to take the second approach. I like to do this way because I can ensure files and permissions are preserved. Anyway, you should do as follows:
-
-```
-dd if=$SDCARD of=$SDCARDBACKUPDIR bs=4M
-```
-
-PS: If you want to see the progress of this command (it *will* take a while) install pv and put it in the middle: `dd if=$SDCARD bs=4M | pv | of=$SDCARDBACKUPDIR`.
-
-With the backup in place, now we can reformat our sd card. Do it the way suits you more, the only thing you need to know is that you have to completely erase ubuntu partition (the second one) and replace it with an empty (non-formatted) partition. The LVM volume will be built on top of this partition, then we copy the files from the backup when done.
-
-In my case, I've screwed things up and had to reformat the sd card entirely, so I'm going to tell how I did to get things done. But these steps should be similar to those who did not screw the sd card. Since I had a backup, it was easy to copy everything back and edit some files to make the system work again.
-
-I've used gparted. So plug the sd card back to your linux pc and open the app. Then go to (some terms might not be the same since I'm translating from portuguese to english here) Device > New Partition Table. This will erase the entire device (which I needed because I had nuked the Ubuntu partition lol). Choose msdos format. 
-
-Now with the blank scheme, right click and choose New. Create a new fat32 partition about 7GB long (7168 MB, there's a field for you to write that). Hit OK and create another partition, this one will be non-formatted and will use the remaining free space.
-
-After the creation, right click the scond partition (the non-formatted one) and choose Manage Flags, tick lvm and confirm. That should do it for gparted. Close the application.
-
-Now back to the terminal, now we go to lvm. LVM has a full hierarchy of device allocation which needs to be done. Since I will not spend time explaining it, think this way: we have the empty partition, to lvm it, we need to "mark" it as usable (turn it into a physical volume), then we make it part of a group and finally we create a logical volume which will be our device to be formatted by gparted again. OK, these are several layers, but in the end it will be worth it, trust me. Oh, and I'm assuming the fat32 partition to be /dev/sda1 and the ubuntu (LVM) partition to be /dev/sda2. Let's start by tainting the partition to be an lvm one:
-
+Here I'm going to take the third approach. I like to do this way because I can ensure files and permissions are preserved and is also faster than dd. Anyway, you should do as follows, install fsarchiver and btrfs (for later use):
 
 ```
-sudo pvcreate /dev/sda2
+sudo apt install fsarchiver btrfs-progs -y
 ```
 
-Then we create the group:
+Then we make a backup of the entire disk:
 
 ```
-sudo vgcreate vg0 /dev/sda2
+sudo umount "$SDCARD"1 "$SDCARD"2
+mkdir -p $SDCARDBACKUPDIR && cd $SDCARDBACKUPDIR
+sudo fsarchiver -v savefs ./sdcard_backup_switch_ubuntu_$(date +%F).fsa "$SDCARD"1 "$SDCARD"2
 ```
 
-Finally (for the lvm part), create the logical volume:
+With the backup in place, we can "convert" the filesystem. With fsarchiver this will be like a walk in the park, easy-peasy. Run the command below:
 
 ```
-sudo lvcreate -n root -l 100%FREE vg0
+sudo fsarchiver -v restfs ./sdcard_backup_switch_ubuntu_$(date +%F).fsa id=1,dest="$SDCARD"2,uuid=$(uuidgen)
 ```
 
-PS: If you need to remove the volume do this: `sudo lvremove /dev/vg0/root`
-PS2: To view everything use `sudo lvdisplay`
-
-Now we create the ext4 partition:
+We need now to get the uuid of the $SDCARD2. Run:
 
 ```
-sudo mkfs.ext4 /dev/vg0/root
+sudo blkid
 ```
 
-Now we need to restore the backup, we will mount our image as a loop device and restore all the files. Then we will make some tweaks to make lvm work out of the box on the switch.
+Note down (or copy) the UUID (not the UUID_SUB or PARTUUID). We are going to edit two files in the sd card so Ubuntu can boot again after the changes. Create two folders so we can mount the two partitions:
 
 ```
-sudo losetup --partscan --find --show /path/to/backup.img
+sudo mkdir -p /mnt/boot /mnt/ubuntu
+sudo mount "$SDCARD"1 /mnt/boot
+sudo mount "$SDCARD"2 /mnt/ubuntu
 ```
 
-This will output /dev/loopX, use this on the next commands. First we make the folders where we are going to mount our partitions:
+Edit fstab:
 
 ```
-sudo mkdir /mnt/backup1 /mnt/backup2 /mnt/restore1 /mnt/restore2
+sudo vim /mnt/ubuntu/etc/fstab
 ```
 
-Then mount the two partitions:
+Replace the UUID to the / mount with the UUID you copied above and ext4 with btrfs. Edit uenv.txt file:
 
 ```
-sudo mount /dev/loopXp1 /mnt/backup1
-sudo mount /dev/loopXp2 /mnt/backup2
+sudo echo "rootfstype=btrfs" >> /mnt/boot/switchroot/ubuntu/uenv.txt
 ```
 
-We also mount the sd card, to restor the files:
+Now unmount the partitions:
 
 ```
-sudo mount /dev/sda1 /mnt/restore1
-sudo mount /dev/vg0/root /mnt/restore2
+sudo umount "$SDCARD"1 "$SDCARD"2
 ```
 
-Now restore all files:
+Remove the sd card from your PC, put back on the switch and boot into Ubuntu again.
+
+## Creating the first BTRFS snapshot
+
+Login again into your switch by using ssh:
 
 ```
-sudo rsync -ah --progress /mnt/backup1/* /mnt/restore1
-sudo rsync -ah --progress /mnt/backup2/* /mnt/restore2
+ssh your-username@your-switch-ip
 ```
 
-TODO: 
-HYPOTHESIS 1: There's a iniramfs inside sd/switchroot/ubuntu, this is what should be loaded by coreboot. So, by setting some kernel params, this initramfs should be able to load lvm. If not, I can try to generate a new one with support for it.
-HYPOTHESIS 2: Apparently, l4t ubuntu uses a coreboot to boot the kernel that is in the /boot dir. But this dir is inside the lvm partition. So I think I need to make /boot on another partition and then change the kernel boot options to start lvm and boot mount the root partition.
+By restoring the partition using fsarchiver, we missed the subvolume creation part. We should use subvolumes to take full advantage of btrfs capalities (not only snapshots, but the hability, for example, of including other disks as part of ur partition if needed). Let's create a subvolume to boot into it:
 
-Util: this link shows l4t boot process and talks avout extlinux.conf which may help setup where the partition ewill be. also shows how to geberate a new iniranfs. so maybe you should try lvm again before testing brtfs. Link: https://forums.developer.nvidia.com/t/can-move-my-root-partition-to-a-btrfs-subvolume/179276
+```
+sudo btrfs subvolume snapshot / /@
+```
+
+Now we get our subvolume id:
+
+```
+sudo btrfs subvolume list /
+```
+
+Output should be something like this:
+
+```
+ID 262 gen 96 top level 5 path @
+```
+
+The id in the example is 262. Set it to be the default one (remember to use YOUR subvolid):
+
+```
+btrfs subvolume set-default 262 /
+```
+
+Reboot:
+
+```
+sudo reboot
+```
+
+SSH into the switch again and check if you booted into the subvolume:
+
+```
+sudo mount | grep mmcblk0p2
+```
+
+Output should show "/@":
+
+```
+/dev/mmcblk0p2 on / type btrfs (rw,noatime,ssd,space_cache,subvolid=262,subvol=/@)
+```
+
+If this is the case we can mount the root volume and delete the old files.
+
+** WARNING ** : only proceed if everything is working like I described above. Because the following step will delete all files inside your system except the subvolume. You were advised.
+
+```
+sudo mount -o subvolid=0 /dev/mmcblk0p2 /mnt
+```
+
+Enter /mnt and remove everything except the snapshot:
+
+```
+cd /mnt
+ls | grep -v @ | xargs sudo rm -rf
+```
+
+Reboot and check if the system is still working:
+
+```
+sudo reboot
+```
+
+You can follow these steps (except removing files from another volume) to create snapshots and rolling back to them if needed. To rollback to a snapshot you just need to change the default subvolume id using the command `btrfs subvolume set-default ID /` and reboot. To create a snapshot you run the first command of this topic `sudo btrfs subvolume snapshot / /SNAPSHOT_NAME`. 
+
+Then we are done for the filesystem part.
+
+## Control Ubuntu with joycons
+
+To do this I will use L4T Ubuntu Megascript help. It is a life-saver for those who run L4T Ubuntu on their Switch. It has a lot of functions, which means it installs a lot of things. Unfortunately, this is not what I want. But since the script is open source, we can use only the part responsible to install the joycon-mouse, without taking much space or changing too much our setup. So, to install it, run this:
+
+```
+bash <( wget -O - https://raw.githubusercontent.com/cobalt2727/L4T-Megascript/master/scripts/joycon-mouse.sh )
+```
+
+It might throw a few errors related to some "userinput_func" function, but we can ignore them. Reboot and voilà the joycons are controlling the mouse. I will leave the default mapping here for documentation purposes:
+
+Button  Key
+B   Left Click
+A   Right Click
+X   Middle Mouse Button
+L   Volume Down
+R   Volume Up
+ZR  Brightness Up
+ZL  Brightness Down
+D-PAD   Keyboard Arrow Keys
+Screenshot  Turn the mouse off and on (leave off when playing games)
+Home    Escape
++   Enter
+-   Back
+Right Stick Click   F5
+Left Stick XY   Mouse XY
+Right Stick XY  Scroll XY
+
+## VNC Remote Access
+
+Let's install x11vnc and turn it into a service so we can manage our switch graphically from another host. First install it:
+
+```
+sudo apt install x11vnc -y
+```
+
+Before proceeding, it is needed to understand one thing: in Ubuntu 18.04, there are two X displays available. One is for the gdm user, which shows the login screen, the other is for the logged user. Why it is so important to understand this? Because we will need two instances of x11vnc running, hence we will create two services. 
+
+When connecting to VNC, you will need two client connections: first connect to port 5900 and login, then connect to port 5901 to see your desktop. 
+
+Now let's create both services. For each block, copy and paste all lines at once:
+
+```
+sudo bash -c "cat << EOF > /etc/systemd/system/x11vnc-loginscreen.service 
+[Unit]
+Description=Start x11vnc at startup.
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/x11vnc -display :0 -auth /run/user/120/gdm/Xauthority -forever -localhost -nopw   -noxdamage -repeat -rfbport 5900 -shared    -ncache 10 -ncache_cr
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
+EOF
+"
+```
+
+```
+sudo bash -c "cat << EOF > /etc/systemd/system/x11vnc-loggedin.service 
+[Unit]
+Description=Start x11vnc at startup, before login.
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/x11vnc -display :1 -auth /run/user/1000/gdm/Xauthority -forever  -localhost    -noxdamage -repeat -nopw  -rfbport 5901 -shared    -ncache 10 -ncache_cr
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
+EOF
+"
+```
+
+Now enable both services and reboot:
+
+```
+sudo systemctl enable x11vnc-loginscreen x11vnc-loggedin
+sudo reboot
+```
+
+One observation: the -localhost flag means that x11vnc will only accept connections from 127.0.0.1, which means that you will only be able to connect via SSH tunnel (more secure). That's why I've set x11vnc to run without a password, since the service is already protected by SSH authentication.
+
+Also, when connecting, remember to set two connections: one for port 5900 and one for 5901. Which are, respectively, for the login screen and the loggedin screen.
+
+## Autoboot into Ubuntu
+
+If wanted, you can set Hekate to autoboot into Ubuntu. Here's how to do it:
+
+- Boot into Hekate;
+- Go to options (top-right of the screen);
+- Tap "Auto Boot";
+- Select "L4T Ubuntu Bionic";
+- Tap into "Save Options" (bottom of the screen).
+
+You're done! You can shutdown or boot into Ubuntu again.
+
+## Installing Steam Link
+
+Installing SteamLink will be a challenge. It IS available for arm, but only for Raspberry Pi OS. But there should be a way. [This guide](https://zignar.net/2019/11/10/steamlink-on-archlinuxarm/) shows that you can use a VM to download and install SteamLink on the RPi OS and transfer that executable to another Raspberry running Arch Linux, a different OS. So, the Switch is aarch64, which should be compatible with armhf. I'm going to try if this works. In Brazil we call this a "gambiarra" lol. 
+
+OBS.: The commands on this section should be run on a x86 PC.
+
+First go to some folder where you can temporarily store the vm files:
+
+```
+mkdir -p $BASEDIR/vm && cd $BASEDIR/vm
+```
+
+Now download the Kernel to be used in the VM:
+
+```
+git clone https://github.com/dhruvvyas90/qemu-rpi-kernel.git
+```
+
+Now download de OS (you can find the most recent version [here](https://www.raspberrypi.com/software/operating-systems/)):
+
+```
+wget https://downloads.raspberrypi.org/raspios_lite_armhf/images/raspios_lite_armhf-2022-01-28/2022-01-28-raspios-bullseye-armhf-lite.zip
+```
+
+Extract it:
+
+```
+unzip 2022-01-28-raspios-bullseye-armhf-lite.zip
+```
+
+Remove the zip file:
+
+```
+rm 2022-01-28-raspios-bullseye-armhf-lite.zip
+```
+
+The space in the image is tight, so we need to expand it so we have more room to install all the progs we need. Do this by running dd:
+
+```
+dd if=/dev/zero bs=1M count=4096 >> 2022-01-28-raspios-bullseye-armhf-lite.zip
+```
+
+Now mount the image:
+
+```
+sudo losetup -f -P --show 2022-01-28-raspios-bullseye-armhf-lite.img
+```
+
+The output should be something like `/dev/loop26`. Let's use gparted to expand the partition, open it. 
+
+```
+sudo gparted /dev/loop26
+```
+
+Right-click the ext4 partition and expand it so it fills the entire available space. Hit OK and Apply Changes. After it's done you can close gparted.
+
+Now let's mount the partition and edit some files to avoid errors when launching the VM:
+
+```
+sudo mount /dev/loop26p2 /mnt
+```
+
+Now edit this file inside /mnt:
+
+```
+sudo vim /mnt/etc/ld.so.preload
+```
+
+And comment the only line inside it. 
+
+Also, edit fstab:
+
+```
+sudo vim /mnt/etc/fstab
+```
+
+Replace PARTUUID=xxxxx from /boot with /dev/sda1 and PARTUUID=xxxxx from / to /dev/sda2. 
+
+Now unmount the partition and remove the virtual device:
+
+```
+sudo umount /mnt
+sudo losetup -d /dev/loop26
+```
+
+Finally, let's start the VM:
+
+```
+qemu-system-arm -M versatilepb -cpu arm1176 -m 256 -kernel qemu-rpi-kernel/kernel-qemu-5.10.63-bullseye -drive format=raw,file=2022-01-28-raspios-bullseye-armhf-lite.img,index=0,media=disk -append "dwc_otg.lpm_enable=0 root=/dev/sda2 console=ttyAMA0 rootfstype=ext4 elevator=deadline rootwait" -dtb qemu-rpi-kernel/versatile-pb-buster.dtb -no-reboot -serial stdio
+```
+
+Remember to edit the paths to match your files!
+
+Qemu should open a window, but the VM terminal will be available where you typed the command. When it finishes loading, login with user 'pi' and password 'raspberry'. Also while booting, the VM might complain about filesystems and fallback to emergency mode, just wait and it will keep loading some services and will prompt you for login.
+
+After you login it will take a while to give you access to a shell. Press Enter after waiting a while because sometimes it needs a "little push" lol. Anyway, once logged in, run:
+
+```
+sudo apt-get update && sudo apt install python3-pip python3-venv steamlink libgles2-mesa -y
+```
+
+Copy some files needed by the app that won't be transferred by exodus:
+
+```
+scp /usr/lib/arm-linux-gnueabihf/libbcm_host.so your-username@your-switch-ip:/usr/lib/arm-linux-gnueabihf/libbcm_host.so 
+```
+
+Install exodus:
+
+```
+python3 -m venv venv
+venv/bin/python -m pip install exodus-bundler
+```
+
+Create some files to tell steamlink to ignore some errors:
+
+```
+touch ~/.local/share/SteamLink/.ignore_cpuinfo
+touch ~/.local/share/SteamLink/.ignore_gpumem
+touch ~/.local/share/SteamLink/.ignore_cec
+touch ~/.local/share/SteamLink/.ignore_X11
+```
+
+
+Then run steamlink to allow it to install some dependencies:
+
+```
+steamlink
+```
+
+Send steamlink to the switch using exodus:
+
+```
+venv/bin/exodus steamlink | ssh your-username@your-switch-ip
+```
+
+Next **login into your switch**:
+
+```
+ssh your-username@your-switch-ip
+```
+
+From now on all commands are run in the switch!
+
+First, add exodus bin directory to your path:
+
+```
+echo "export PATH=/home/YOURUSERNAME/.exodus/bin:$PATH" >> ~/.bashrc
+```
+
+Now we are going to install some dependencies, but one of them has one conflict on one file. So we rename it. Don't worry because since this file is reinstalled in the process, it won't affect the system. Also, as we are *renaming* it, we can always rollback. Run:
+
+```
+sudo mv /usr/share/glvnd/egl_vendor.d/50_mesa.json /usr/share/glvnd/egl_vendor.d/50_mesa.json.bak
+```
+
+Install some dependencies:
+
+```
+sudo dpkg —add-architecture armhf && sudo apt update
+sudo apt install curl libc6:armhf zlib1g:armhf libsdl2-2.0-0:armhf libsdl2-image-2.0-0:armhf libsdl2-ttf-2.0-0:armhf libsdl2-mixer-2.0-0:armhf libudev1:armhf -y
+```
+
+Create the same files to prevent steamlink complaining about stuff:
+
+```
+touch ~/.local/share/SteamLink/.ignore_cpuinfo
+touch ~/.local/share/SteamLink/.ignore_gpumem
+touch ~/.local/share/SteamLink/.ignore_cec
+touch ~/.local/share/SteamLink/.ignore_X11
+```
+
+## References
+
+[Running Steamlink on Arch Linux ARM](https://zignar.net/2019/11/10/steamlink-on-archlinuxarm/)
+[Enable remote VNC from the commandline?](https://askubuntu.com/questions/4474/enable-remote-vnc-from-the-commandline)
+[VNC vino over SSH tunnel ONLY](https://askubuntu.com/questions/713497/vnc-vino-over-ssh-tunnel-only)
+[LVNC vino over SSH tunnel ONLY4T MegaScript](https://github.com/cobalt2727/L4T-Megascript)
+[Rollback root snapshot in BTRFS](https://unix.stackexchange.com/questions/622148/rollback-root-snapshot-in-btrfs)
+[Where are my BTRFS subvolumes?](https://askubuntu.com/questions/1204802/where-are-my-btrfs-subvolumes)
+[Can move my root partition to a btrfs subvolume?](https://forums.developer.nvidia.com/t/can-move-my-root-partition-to-a-btrfs-subvolume/179276)
