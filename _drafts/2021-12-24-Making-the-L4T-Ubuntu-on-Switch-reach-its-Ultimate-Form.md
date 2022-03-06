@@ -274,7 +274,7 @@ ID 262 gen 96 top level 5 path @
 The id in the example is 262. Set it to be the default one (remember to use YOUR subvolid):
 
 ```
-btrfs subvolume set-default 262 /
+sudo btrfs subvolume set-default 262 /
 ```
 
 Reboot:
@@ -422,174 +422,55 @@ You're done! You can shutdown or boot into Ubuntu again.
 
 ## Installing Steam Link
 
-Installing SteamLink will be a challenge. It IS available for arm, but only for Raspberry Pi OS. But there should be a way. [This guide](https://zignar.net/2019/11/10/steamlink-on-archlinuxarm/) shows that you can use a VM to download and install SteamLink on the RPi OS and transfer that executable to another Raspberry running Arch Linux, a different OS. So, the Switch is aarch64, which should be compatible with armhf. I'm going to try if this works. In Brazil we call this a "gambiarra" lol. 
-
-OBS.: The commands on this section should be run on a x86 PC.
-
-First go to some folder where you can temporarily store the vm files:
+We will install Steam Link by using Box64. Since the Switch uses arm, we cannot install the streaming app directly. There *IS* a binary compiled for arm, but it depends on libraries that are present only on the Raspberry Pi OS. Believe me, I tried to circumvent this. So this time we are going to try Box64. To install it, first run this to install cmake:
 
 ```
-mkdir -p $BASEDIR/vm && cd $BASEDIR/vm
+sudo apt install cmake
 ```
 
-Now download the Kernel to be used in the VM:
+Now run this:
 
 ```
-git clone https://github.com/dhruvvyas90/qemu-rpi-kernel.git
+cd $BASEDIR
+git clone https://github.com/ptitSeb/box64 && cd box64
+mkdir build && cd build
+git checkout tags/v0.1.6 # you can check other tags by running `git tag`
+cmake .. -DTEGRAX1=1 -DCMAKE_BUILD_TYPE=RelWithDebInfo
+make -j4
+sudo make install
 ```
 
-Now download de OS (you can find the most recent version [here](https://www.raspberrypi.com/software/operating-systems/)):
+The commands above will download box64, compile and install it. Then we need to restart systemd-binfmt to enable box64:
 
 ```
-wget https://downloads.raspberrypi.org/raspios_lite_armhf/images/raspios_lite_armhf-2022-01-28/2022-01-28-raspios-bullseye-armhf-lite.zip
+sudo systemctl restart systemd-binfmt
 ```
 
-Extract it:
+Now we install steam, first install some dependencies:
 
 ```
-unzip 2022-01-28-raspios-bullseye-armhf-lite.zip
+sudo apt install debconf libc6 libgl1-mesa-dri libgl1-mesa-glx libgpg-error0 libstdc++6 libudev1 libx11-6 libxinerama1 xz-utils 
 ```
 
-Remove the zip file:
+Then get a link to download i386 steam [here](https://packages.ubuntu.com/bionic/i386/steam/download). Then download it using wget (the link below is just one example, it may not work):
 
 ```
-rm 2022-01-28-raspios-bullseye-armhf-lite.zip
+cd $BASEDIR
+wget http://mirrors.kernel.org/ubuntu/pool/multiverse/s/steam/steam_1.0.0.54+repack-5ubuntu1_i386.deb
 ```
 
-The space in the image is tight, so we need to expand it so we have more room to install all the progs we need. Do this by running dd:
+Unpack it:
 
 ```
-dd if=/dev/zero bs=1M count=4096 >> 2022-01-28-raspios-bullseye-armhf-lite.zip
+ar x steam_1.0.0.54+repack-5ubuntu1_i386.deb
+tar xvf data.tar.xz
 ```
 
-Now mount the image:
+Copy data to /usr:
 
 ```
-sudo losetup -f -P --show 2022-01-28-raspios-bullseye-armhf-lite.img
-```
-
-The output should be something like `/dev/loop26`. Let's use gparted to expand the partition, open it. 
-
-```
-sudo gparted /dev/loop26
-```
-
-Right-click the ext4 partition and expand it so it fills the entire available space. Hit OK and Apply Changes. After it's done you can close gparted.
-
-Now let's mount the partition and edit some files to avoid errors when launching the VM:
-
-```
-sudo mount /dev/loop26p2 /mnt
-```
-
-Now edit this file inside /mnt:
-
-```
-sudo vim /mnt/etc/ld.so.preload
-```
-
-And comment the only line inside it. 
-
-Also, edit fstab:
-
-```
-sudo vim /mnt/etc/fstab
-```
-
-Replace PARTUUID=xxxxx from /boot with /dev/sda1 and PARTUUID=xxxxx from / to /dev/sda2. 
-
-Now unmount the partition and remove the virtual device:
-
-```
-sudo umount /mnt
-sudo losetup -d /dev/loop26
-```
-
-Finally, let's start the VM:
-
-```
-qemu-system-arm -M versatilepb -cpu arm1176 -m 256 -kernel qemu-rpi-kernel/kernel-qemu-5.10.63-bullseye -drive format=raw,file=2022-01-28-raspios-bullseye-armhf-lite.img,index=0,media=disk -append "dwc_otg.lpm_enable=0 root=/dev/sda2 console=ttyAMA0 rootfstype=ext4 elevator=deadline rootwait" -dtb qemu-rpi-kernel/versatile-pb-buster.dtb -no-reboot -serial stdio
-```
-
-Remember to edit the paths to match your files!
-
-Qemu should open a window, but the VM terminal will be available where you typed the command. When it finishes loading, login with user 'pi' and password 'raspberry'. Also while booting, the VM might complain about filesystems and fallback to emergency mode, just wait and it will keep loading some services and will prompt you for login.
-
-After you login it will take a while to give you access to a shell. Press Enter after waiting a while because sometimes it needs a "little push" lol. Anyway, once logged in, run:
-
-```
-sudo apt-get update && sudo apt install python3-pip python3-venv steamlink libgles2-mesa -y
-```
-
-Copy some files needed by the app that won't be transferred by exodus:
-
-```
-scp /usr/lib/arm-linux-gnueabihf/libbcm_host.so your-username@your-switch-ip:/usr/lib/arm-linux-gnueabihf/libbcm_host.so 
-```
-
-Install exodus:
-
-```
-python3 -m venv venv
-venv/bin/python -m pip install exodus-bundler
-```
-
-Create some files to tell steamlink to ignore some errors:
-
-```
-touch ~/.local/share/SteamLink/.ignore_cpuinfo
-touch ~/.local/share/SteamLink/.ignore_gpumem
-touch ~/.local/share/SteamLink/.ignore_cec
-touch ~/.local/share/SteamLink/.ignore_X11
-```
-
-
-Then run steamlink to allow it to install some dependencies:
-
-```
-steamlink
-```
-
-Send steamlink to the switch using exodus:
-
-```
-venv/bin/exodus steamlink | ssh your-username@your-switch-ip
-```
-
-Next **login into your switch**:
-
-```
-ssh your-username@your-switch-ip
-```
-
-From now on all commands are run in the switch!
-
-First, add exodus bin directory to your path:
-
-```
-echo "export PATH=/home/YOURUSERNAME/.exodus/bin:$PATH" >> ~/.bashrc
-```
-
-Now we are going to install some dependencies, but one of them has one conflict on one file. So we rename it. Don't worry because since this file is reinstalled in the process, it won't affect the system. Also, as we are *renaming* it, we can always rollback. Run:
-
-```
-sudo mv /usr/share/glvnd/egl_vendor.d/50_mesa.json /usr/share/glvnd/egl_vendor.d/50_mesa.json.bak
-```
-
-Install some dependencies:
-
-```
-sudo dpkg —add-architecture armhf && sudo apt update
-sudo apt install curl libc6:armhf zlib1g:armhf libsdl2-2.0-0:armhf libsdl2-image-2.0-0:armhf libsdl2-ttf-2.0-0:armhf libsdl2-mixer-2.0-0:armhf libudev1:armhf -y
-```
-
-Create the same files to prevent steamlink complaining about stuff:
-
-```
-touch ~/.local/share/SteamLink/.ignore_cpuinfo
-touch ~/.local/share/SteamLink/.ignore_gpumem
-touch ~/.local/share/SteamLink/.ignore_cec
-touch ~/.local/share/SteamLink/.ignore_X11
+cd $BASEDIR
+sudo cp -r ./usr/* /usr
 ```
 
 ## References
