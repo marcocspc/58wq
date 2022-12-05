@@ -27,40 +27,40 @@ Ok, when I booted up no image was shown in the onboard hdmi output. This meant t
 - Once on this screen press F6 to go to advanced mode:
 ![]({{ site.baseurl }}/images/proxmox-gpu-passthrough-tutorial/1.png)
 - Then go to Advanced > Chipset Configuration:
-![]({{ site.baseurl }}/Users/marcocspc/Pictures/Capturas\ de\ Tela}/2.png)
+![]({{ site.baseurl }}/images/proxmox-gpu-passthrough-tutorial/2.png)
 - Then change Primary Graphics Adapter from Pci Express to Onboard:
-![]({{ site.baseurl }}/Users/marcocspc/Pictures/Capturas\ de\ Tela}/3.png)
+![]({{ site.baseurl }}/images/proxmox-gpu-passthrough-tutorial/3.png)
 - Then hit F10 to save and reset. Change the hdmi cable to the correct output port and go back again to the setup part and press F6.
 - Let's fix system date, go to the bottom-right of the screen and click on the timestamp to set up the correct date:
-![]({{ site.baseurl }}/Users/marcocspc/Pictures/Capturas\ de\ Tela}/4.png)
+![]({{ site.baseurl }}/images/proxmox-gpu-passthrough-tutorial/4.png)
 - Fix your time settings and click OK. Next, go to Advanced > Chipset Configuration and Check if VT-d is enabled (this is needed to do GPU passthrough later):
-![]({{ site.baseurl }}/Users/marcocspc/Pictures/Capturas\ de\ Tela}/5.png)
+![]({{ site.baseurl }}/images/proxmox-gpu-password-tutorial/5.png)
 - Also check if your HDD is the default boot device. Go to Boot (top of the screen) and check if your HDD is the Boot Option #1:
-![]({{ site.baseurl }}/Users/marcocspc/Pictures/Capturas\ de\ Tela}/6.png)
+![]({{ site.baseurl }}/images/proxmox-gpu-password-tutorial/6.png)
 - Go to Advanced > Chipset Configuration, scroll all the way down to the bottom of the page and check if Restore on AC/Power Loss settings it set to the desired option. In my case, I needed my desktop ON all the time, so I chose Power On:
-![]({{ site.baseurl }}/Users/marcocspc/Pictures/Capturas\ de\ Tela}/7.png)
+![]({{ site.baseurl }}/images/proxmox-gpu-password-tutorial/7.png)
 - Check if Serial Port is enabled in Advanced > Super IO Configuration. This is useful if you need to connect to your desktop via serial interface, when you do not have a monitor available.
 - Finally, go to Security and click on Supervisor Password to set a new password for your setup:
-![]({{ site.baseurl }}/Users/marcocspc/Pictures/Capturas\ de\ Tela}/8.png)
+![]({{ site.baseurl }}/images/proxmox-gpu-password-tutorial/8.png)
 - Hit F10 so save and reset.
 
 ## Installing Proxmox
 
 Before booting again, insert an USB flash device with Proxmox ISO setup on it. Then, while booting, press F11 to select USB boot (you will be prompted for the admin password): 
-![]({{ site.baseurl }}/Users/marcocspc/Pictures/Capturas\ de\ Tela}/9.png)
-![]({{ site.baseurl }}/Users/marcocspc/Pictures/Capturas\ de\ Tela}/10.png)
+![]({{ site.baseurl }}/images/proxmox-gpu-password-tutorial/9.png)
+![]({{ site.baseurl }}/images/proxmox-gpu-password-tutorial/10.png)
 
 Once in Proxmox boot logo, select "Install Proxmox VE".
-![]({{ site.baseurl }}/Users/marcocspc/Pictures/Capturas\ de\ Tela}/11.png)
+![]({{ site.baseurl }}/images/proxmox-gpu-password-tutorial/11.png)
 
 Click "I Agree" in the license screen (well, otherwise you won't be able to proceed with installation). Then you will be presented with a new screen where you will select the disk where Proxmox will be installed, check if this is really your option (if you need to change your partition setting, click on Option):
-![]({{ site.baseurl }}/Users/marcocspc/Pictures/Capturas\ de\ Tela}/12.png)
+![]({{ site.baseurl }}/images/proxmox-gpu-password-tutorial/12.png)
 
 Then you will be presented to a language settings screen: choose your region, keyboard, etc. After this, set your root password in the next screen. Then set your proxmox server network settings:
-![]({{ site.baseurl }}/Users/marcocspc/Pictures/Capturas\ de\ Tela}/13.png)
+![]({{ site.baseurl }}/images/proxmox-gpu-passthrough-tutorial/13.png)
 
 Finally review your settings in the last screen and hit Install! The installation will automatically reboot after it finishes. Please be patient.
-![]({{ site.baseurl }}/Users/marcocspc/Pictures/Capturas\ de\ Tela}/14.png)
+![]({{ site.baseurl }}/images/proxmox-gpu-passthrough-tutorial/14.png)
 
 ## The license annoyance
 
@@ -206,47 +206,47 @@ Once more, reboot. This should do it do the host, let's go to the VM.
 Go to proxmox's web interface on your browser of choice and login as root. (address is https://your.host.ip:8006/)
 
 After this, go to Your host > Local > ISO Images. Then click "Download from URL":
-![]({{ site.baseurl }}/Users/marcocspc/Pictures/Capturas\ de\ Tela}/17.png)
+![]({{ site.baseurl }}/images/proxmox-gpu-passthrough-tutorial/17.png)
 
 Paste [Ubuntu ISO download link](https://releases.ubuntu.com/22.04.1/ubuntu-22.04.1-desktop-amd64.iso) into the "URL:" text field and click Query URL. Then click Download:
-![]({{ site.baseurl }}/Users/marcocspc/Pictures/Capturas\ de\ Tela}/18.png)
+![]({{ site.baseurl }}/images/proxmox-gpu-passthrough-tutorial/18.png)
 
 You'll see an output windows, wait for the download to finish and then close it:
-![]({{ site.baseurl }}/Users/marcocspc/Pictures/Capturas\ de\ Tela}/19.png)
+![]({{ site.baseurl }}/images/proxmox-gpu-passthrough-tutorial/19.png)
 
 Then right click your host in the left column and click "Create VM":
-![]({{ site.baseurl }}/Users/marcocspc/Pictures/Capturas\ de\ Tela}/15.png)
+![]({{ site.baseurl }}/images/proxmox-gpu-passthrough-tutorial/15.png)
 
 Leave node and ID as default:
-![]({{ site.baseurl }}/Users/marcocspc/Pictures/Capturas\ de\ Tela}/16.png)
+![]({{ site.baseurl }}/images/proxmox-gpu-passthrough-tutorial/16.png)
 
 Select the ISO you just downloaded:
-![]({{ site.baseurl }}/Users/marcocspc/Pictures/Capturas\ de\ Tela}/20.png)
+![]({{ site.baseurl }}/images/proxmox-gpu-passthrough-tutorial/20.png)
 
 In the next screen set Graphic Card as Standard VGA, Machine as q35, Bios as OVMF (UEFI). The rest leave as default:
-![]({{ site.baseurl }}/Users/marcocspc/Pictures/Capturas\ de\ Tela}/21.png)
+![]({{ site.baseurl }}/images/proxmox-gpu-passthrough-tutorial/21.png)
 (PSST.: In the image I selected SPICE, but later I realized it was not a good choice because it doesn't work well with novnc)
 
 Select the disk size as desired:
-![]({{ site.baseurl }}/Users/marcocspc/Pictures/Capturas\ de\ Tela}/22.png)
+![]({{ site.baseurl }}/images/proxmox-gpu-passthrough-tutorial/22.png)
 
 As well as the number of CPU cores:
-![]({{ site.baseurl }}/Users/marcocspc/Pictures/Capturas\ de\ Tela}/23.png)
+![]({{ site.baseurl }}/images/proxmox-gpu-passthrough-tutorial/23.png)
 
 Also inform the amount of desired memory:
-![]({{ site.baseurl }}/Users/marcocspc/Pictures/Capturas\ de\ Tela}/24.png)
+![]({{ site.baseurl }}/images/proxmox-gpu-passthrough-tutorial/24.png)
 
 You can leave network as default:
-![]({{ site.baseurl }}/Users/marcocspc/Pictures/Capturas\ de\ Tela}/25.png)
+![]({{ site.baseurl }}/images/proxmox-gpu-passthrough-tutorial/25.png)
 
 Review, tick "Start after created" and Finish:
-![]({{ site.baseurl }}/Users/marcocspc/Pictures/Capturas\ de\ Tela}/26.png)
+![]({{ site.baseurl }}/images/proxmox-gpu-passthrough-tutorial/26.png)
 
 Then click on your VM > Console to see the video output:
-![]({{ site.baseurl }}/Users/marcocspc/Pictures/Capturas\ de\ Tela}/27.png)
+![]({{ site.baseurl }}/images/proxmox-gpu-passthrough-tutorial/27.png)
 
 Proceed with the installation as you would normally. After finishing the installation, when Ubuntu is asking to remove the installation media and press ENTER, we can shutdown it. Right-click you VM and select Stop:
-![]({{ site.baseurl }}/Users/marcocspc/Pictures/Capturas\ de\ Tela}/28.png)
+![]({{ site.baseurl }}/images/proxmox-gpu-passthrough-tutorial/28.png)
 
 If you get some error like "can’t lock file ‘/var/lock/qemu-server/lock-xxx.conf’ -got timeout", do this in a terminal:
 
@@ -257,14 +257,14 @@ qm unlock $VMID
 ```
 
 Now, back to the web interface, go to Your VM > Hardware:
-![]({{ site.baseurl }}/Users/marcocspc/Pictures/Capturas\ de\ Tela}/29.png)
+![]({{ site.baseurl }}/images/proxmox-gpu-passthrough-tutorial/29.png)
 
 Click on Add > PCI Device and this window should pop up:
-![]({{ site.baseurl }}/Users/marcocspc/Pictures/Capturas\ de\ Tela}/30.png)
-![]({{ site.baseurl }}/Users/marcocspc/Pictures/Capturas\ de\ Tela}/31.png)
+![]({{ site.baseurl }}/images/proxmox-gpu-passthrough-tutorial/30.png)
+![]({{ site.baseurl }}/images/proxmox-gpu-passthrough-tutorial/31.png)
 
 Then click on the "Device:" dropdown list and select your PCI VGA, then click OK:
-![]({{ site.baseurl }}/Users/marcocspc/Pictures/Capturas\ de\ Tela}/32.png)
+![]({{ site.baseurl }}/images/proxmox-gpu-passthrough-tutorial/32.png)
 
 Then you can power on your VM and go to its console again. Once booted up, login and open a terminal. Then type:
 
@@ -273,16 +273,16 @@ lspci | grep NVIDIA
 ```
 
 You should see your adapter there:
-![]({{ site.baseurl }}/Users/marcocspc/Pictures/Capturas\ de\ Tela}/34.png)
+![]({{ site.baseurl }}/images/proxmox-gpu-passthrough-tutorial/34.png)
 
 Now, before installing the driver, we need do disable secure boot. Reboot your Ubuntu by typing `reboot` into the terminal and, when proxmox logo appears, keep pressing Esc until you get to this screen, select device manager:
-![]({{ site.baseurl }}/Users/marcocspc/Pictures/Capturas\ de\ Tela}/36.png)
+![]({{ site.baseurl }}/images/proxmox-gpu-passthrough-tutorial/36.png)
 
 Then Secure Boot Configuration:
-![]({{ site.baseurl }}/Users/marcocspc/Pictures/Capturas\ de\ Tela}/37.png)
+![]({{ site.baseurl }}/images/proxmox-gpu-passthrough-tutorial/37.png)
 
 Then select Attemp Secure Boot and press Space to disable it and press F10 to save and reboot by pressing Esc and Continue in the first screen:
-![]({{ site.baseurl }}/Users/marcocspc/Pictures/Capturas\ de\ Tela}/38.png)
+![]({{ site.baseurl }}/images/proxmox-gpu-passthrough-tutorial/38.png)
 
 Once Ubuntu boots again let's install the driver, type:
 
@@ -291,7 +291,7 @@ sudo apt search nvidia-driver
 ```
 
 See the latest line? It contains a number, in my case it was 525:
-![]({{ site.baseurl }}/Users/marcocspc/Pictures/Capturas\ de\ Tela}/35.png)
+![]({{ site.baseurl }}/images/proxmox-gpu-passthrough-tutorial/35.png)
 
 Then we install the driver 525 (this may take a while):
 
@@ -306,10 +306,10 @@ sudo shutdown -h now
 ```
 
 Optional: Then go to Your VM > Hardware > Display:
-![]({{ site.baseurl }}/Users/marcocspc/Pictures/Capturas\ de\ Tela}/39.png)
+![]({{ site.baseurl }}/images/proxmox-gpu-passthrough-tutorial/39.png)
 
 Optional: Select Default and press OK.
-![]({{ site.baseurl }}/Users/marcocspc/Pictures/Capturas\ de\ Tela}/40.png)
+![]({{ site.baseurl }}/images/proxmox-gpu-passthrough-tutorial/40.png)
 
 Optional: This will make your VM stop outputting video to the NoVNC console and use the VGA HDMI/Displayport output, just in case you want to use a real monitor. If not, just ignore these optional steps.
 
