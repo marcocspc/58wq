@@ -319,7 +319,7 @@ I hope next time I am able to connect to this PC using a serial port. But these 
 
 ## References
 
-[Remove Proxmox Subscription Notice (Tested to 7.1-10)](https://johnscs.com/remove-proxmox51-subscription-notice/)
-[Proxmox Update No Subscription Repository Configuration](https://www.virtualizationhowto.com/2022/08/proxmox-update-no-subscription-repository-configuration/)
-[sed comment line number x to y from files](https://stackoverflow.com/questions/33684705/sed-comment-line-number-x-to-y-from-files)
-[Pci passthrough](https://pve.proxmox.com/wiki/Pci_passthrough)
+- [Remove Proxmox Subscription Notice (Tested to 7.1-10)](https://johnscs.com/remove-proxmox51-subscription-notice/)
+- [Proxmox Update No Subscription Repository Configuration](https://www.virtualizationhowto.com/2022/08/proxmox-update-no-subscription-repository-configuration/)
+- [sed comment line number x to y from files](https://stackoverflow.com/questions/33684705/sed-comment-line-number-x-to-y-from-files)
+- [Pci passthrough](https://pve.proxmox.com/wiki/Pci_passthrough)
