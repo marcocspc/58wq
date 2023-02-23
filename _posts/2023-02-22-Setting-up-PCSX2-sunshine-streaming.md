@@ -15,6 +15,7 @@ Just a few notes on the host VM:
 
 - I used a Debian 11 guest in a proxmox setup;
 - While trying to run PCSX2 in the container, I've got some errors about a few instructions sets that are needed to run the emulator. This happened because I've set the CPU to qemu64 (or something like that) and PCSX2 wasn't able to recognize it. I've had to then turn off the VM and change the CPU to "host" and the emulator launched as expected;
+- Also after getting SSH access to your VM, completely disable any screen, setting it to "none" in proxmox's settings. This is needed to make the containers user the correct VGA;
 - You must disable secure boot (I've taken notes, they are later in the text), or the NVIDIA drivers won't be loaded at the VM startup;
 - This VM uses a passed-through gtx 1060 NVIDIA gpu, so we need to make several tweaks in the code to make the containers work well with this setup.
 
@@ -376,6 +377,7 @@ FROM ${BASE_APP_IMAGE}
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG REQUIRED_PACKAGES=" \
+    vulkan-tools \
     software-properties-common \
     kmod \
     "
@@ -392,6 +394,10 @@ ENV XDG_RUNTIME_DIR=/tmp/.X11-unix
 
 COPY --chmod=777 scripts/startup.sh /opt/gow/startup-app.sh
 COPY --chmod=777 scripts/ensure-nvidia-xorg-driver.sh /opt/gow/ensure-nvidia-xorg-driver.sh
+COPY --chmod=777 scripts/99-glxinfo.sh /etc/cont-init.d/
+
+#the script will only really run if on nvidia hosts, there's an if inside it
+RUN /opt/gow/ensure-nvidia-xorg-driver.sh
 
 ARG IMAGE_SOURCE
 LABEL org.opencontainers.image.source $IMAGE_SOURCE
@@ -407,15 +413,6 @@ set -e
 
 source /opt/gow/bash-lib/utils.sh
 
-# If the host is using the proprietary Nvidia driver, make sure the
-# corresponding xorg driver is installed
-if [ -f /proc/driver/nvidia/version ]; then
-    gow_log "Detected Nvidia drivers, installing them..."
-    /opt/gow/ensure-nvidia-xorg-driver.sh
-fi
-
-source /opt/gow/bash-lib/utils.sh
-
 gow_log "Starting PCSX2"
 
 CFG_DIR=$HOME/.config/PCSX2
@@ -425,12 +422,74 @@ exec /usr/bin/pcsx2-qt
 EOF
 ```
 
+Another thing I've discovered while trying to debug this is that glxinfo execution before (or after) PCSX2 is running inside its container allow it to run properly. Without this is would just show an "failed to create blabla context blabla" and fail to run the game. I discovered this because once I received this message, I would launch glxinfo to check whether I was using nvidia drivers or llvm pipe as OpenGL renderer. Anyway, after launching glxinfo I tried again and everytime the game would launch as normal LOL. So following the IT JUST WORKS (tm) I decided to include this command at container startup. To do this, we create a 99-glxinfo.sh script:
+
+```
+cat << "EOF" > images/pcsx2/scripts/99-glxinfo.sh
+#!/bin/bash
+
+set -e
+
+source /opt/gow/bash-lib/utils.sh
+
+if [ -z "$DISPLAY" ]; then
+    gow_log "FATAL: No DISPLAY environment variable set.  No X."
+    exit 13
+fi
+
+gow_log "Waiting for X server..."
+# Taken from https://gist.github.com/tullmann/476cc71169295d5c3fe6
+MAX=120 # About 120 seconds
+CT=0
+while ! xdpyinfo >/dev/null 2>&1; do
+    sleep 1s
+    CT=$(( CT + 1 ))
+    if [ "$CT" -ge "$MAX" ]; then
+        gow_log "FATAL: $0: Gave up waiting for X server $DISPLAY"
+        exit 11
+    fi
+done
+
+gow_log "running glxinfo, somehow this is needed to make pcsx2 work properly"
+glxinfo > /dev/null
+EOF
+```
+
 Create the ensure-nvidia-xorg-driver.sh script:
 
 
 ```
 cat << "EOF" > images/pcsx2/scripts/ensure-nvidia-xorg-driver.sh
-Try to download the correct package.
+#!/bin/bash
+
+NVIDIA_DRIVER_MOUNT_LOCATION=/nvidia/xorg
+NVIDIA_PACKAGE_LOCATION=/usr/lib/x86_64-linux-gnu/nvidia/xorg
+
+# If the user has requested to skip the check, do so
+if [ "${SKIP_NVIDIA_DRIVER_CHECK:-0}" = "1" ]; then
+    exit
+fi
+
+fail() {
+    (
+        if [ -n "${1:-}" ]; then
+            echo "$1"
+        fi
+        echo "Xorg may fail to start; try mounting drivers from your host as a volume."
+    ) >&2
+    exit 1
+}
+
+# If there's an nvidia_drv.so in the mount location, or in the location where
+# the xserver-xorg-video-nvidia package installs to, assume it's the right one
+for d in $NVIDIA_DRIVER_MOUNT_LOCATION $NVIDIA_PACKAGE_LOCATION; do
+    if [ -f "$d/nvidia_drv.so" ]; then
+        echo "Found an existing nvidia_drv.so"
+        exit
+    fi
+done
+
+# Otherwise, try to download the correct package.
 HOST_DRIVER_VERSION=$(sed -nE 's/.*Module[ \t]+([0-9]+(\.[0-9]+)*).*/\1/p' /proc/driver/nvidia/version)
 
 if [ -z "$HOST_DRIVER_VERSION" ]; then
@@ -440,18 +499,40 @@ else
     echo "Looking for driver version $HOST_DRIVER_VERSION"
 fi
 
+download_pkg() {
+    dl_url=$1
+    dl_file=$2
+
+    echo "Downloading $dl_url"
+
+    if ! wget -q -nc --show-progress --progress=bar:force:noscroll -O "$dl_file" "$dl_url"; then
+        echo "ERROR: Unable to download $dl_file"
+        return 1
+    fi
+}
 
 DOWNLOAD_URL=https://download.nvidia.com/XFree86/Linux-x86_64/$HOST_DRIVER_VERSION/NVIDIA-Linux-x86_64-$HOST_DRIVER_VERSION.run
 DL_FILE=/tmp/nvidia-$HOST_DRIVER_VERSION.run
+EXTRACT_LOC=/tmp/nvidia-drv
 
-echo "Downloading NVIDIA driver"
-wget -O $DL_FILE $DOWNLOAD_URL
+if [ ! -d $EXTRACT_LOC ]; then
+    if ! download_pkg "$DOWNLOAD_URL" "$DL_FILE"; then
+        echo "Couldn't download nvidia driver version $HOST_DRIVER_VERSION"
+        exit 1
+    fi
 
-chmod +x $DL_FILE
+    chmod +x "$DL_FILE"
+    $DL_FILE -x --target $EXTRACT_LOC
+    $DL_FILE --accept-license --no-runlevel-check --no-questions --no-backup --ui=none --no-kernel-module --no-kernel-module-source --no-nouveau-check --no-nv
+idia-modprobe
+    rm "$DL_FILE"
+fi
 
-$DL_FILE --accept-license --no-runlevel-check --no-questions --no-backup --ui=none --no-kernel-module --no-kernel-module-source --no-nouveau-check --no-nvidia-modprobe
+if [ ! -d $NVIDIA_DRIVER_MOUNT_LOCATION ]; then
+    mkdir -p $NVIDIA_DRIVER_MOUNT_LOCATION
+fi
 
-rm $DL_FILE
+cp "$EXTRACT_LOC/nvidia_drv.so" "$EXTRACT_LOC/libglxserver_nvidia.so.$HOST_DRIVER_VERSION" "$NVIDIA_DRIVER_MOUNT_LOCATION"
 
 EOF
 ```
@@ -508,7 +589,7 @@ services:
 EOF
 ```
 
-OK! With this we have all the PCSX2 docker files and scripts in place. But there is still a few modifications to go. Unfortunately, while reading and trying to troubleshoot why the container wouldn't run with GPU acceleration, I've discoreved that the NVIDIA driver needed to be installed in both pcsx2 and xorg containers. In the xorg one there was already a script to do this, but this code did some magic extraction that, while made available the .so files needed to xorg to run, the software would still complain and fall back to software rendering. I was able to fix this by properly running the driver instllation binary inside the container at creation time. To do this, I needed to alter the ensure-nvidia-xorg-driver.sh script, so we can just repurpose the pcsx2 one:
+OK! With this we have all the PCSX2 docker files and scripts in place. But there is still a few modifications to go. Unfortunately, while reading and trying to troubleshoot why the container wouldn't run with GPU acceleration, I've discoreved that the NVIDIA driver needed to be installed in both pcsx2 and xorg containers. In the xorg one there was already a script to do this, but this code did some magic extraction that, while made available the .so files needed by xorg to run, the software would still complain and fall back to software rendering. I was able to fix this by properly running the driver instllation binary inside the container at creation time. To do this, I needed to alter the ensure-nvidia-xorg-driver.sh script, so we can just repurpose the pcsx2 one:
 
 ```
 cp images/pcsx2/scripts/ensure-nvidia-xorg-driver.sh images/xorg/scripts/ensure-nvidia-xorg-driver.sh
