@@ -54,6 +54,7 @@ apt-get install linux-headers-`uname -r` build-essential -y
 Run the driver installation:
 
 ```
+chmod +x ./NVIDIA-Linux-x86_64-${NVIDIA_VERSION}.run
 ./NVIDIA-Linux-x86_64-${NVIDIA_VERSION}.run
 ```
 
@@ -104,6 +105,34 @@ Tue Feb 21 19:07:04 2023
 +-----------------------------------------------------------------------------+
 ```
 
+Also, let's install NVidia Container Toolkit (needed to use GPU drivers inside the container). First, install curl:
+
+```
+apt install curl -y
+```
+
+Now we add the GPG key:
+
+```
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg —dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+```
+
+Then we create the apt source list file:
+
+```
+cat << "EOF" > /etc/apt/sources.list.d/nvidia-container-toolkit.list
+deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://nvidia.github.io/libnvidia-container/stable/debian11/$(ARCH) /
+EOF
+```
+
+Then finally we install it:
+
+```
+apt install -y nvidia-docker2
+```
+
+Reboot so changes can take effect!!
+
 Before running Games on Whales, we still need to configure a virtual monitor, let's do this.
 
 ## Virtual Monitor
@@ -150,6 +179,7 @@ Install docker-compose:
 
 ```
 wget -O /usr/bin/docker-compose https://github.com/docker/compose/releases/download/v2.15.0/docker-compose-linux-x86_64
+chmod +x /usr/bin/docker-compose
 ```
 
 ## Install Games on Whales
@@ -334,13 +364,13 @@ PGID=1000
 To test it, we use retroarch container. Pull the container image:
 
 ```
-./run-gow --platform headless --app retroarch pull
+./run-gow --gpu nvidia --platform headless --app retroarch pull
 ```
 
 Run it:
 
 ```
-./run-gow --platform headless --app retroarch up
+./run-gow --gpu nvidia --platform headless --app retroarch up
 ```
 
 At this point you can test if everything is working as expected. Go to https://your-vm-ip:47990/ to pair your device. You can follow [this guide](https://games-on-whales.github.io/gow/connecting.html) to know how to do this. Once you finished your testing, press Ctrl + C on your terminal to finish the containers.
@@ -348,7 +378,7 @@ At this point you can test if everything is working as expected. Go to https://y
 Once tested, bring down the containers and remove them. This is needed because we are rebuilding images ahead:
 
 ```
-./run-gow --platform headless --app retroarch down
+./run-gow --gpu nvidia --platform headless --app retroarch down
 docker container prune
 ```
 
@@ -687,13 +717,13 @@ ARG REQUIRED_PACKAGES=" \
 Build the images using the command below:
 
 ```
-./run-gow --platform headless --app pcsx2 build
+./run-gow --gpu nvidia --platform headless --app pcsx2 build
 ```
 
 To test (after the long process of image building), use:
 
 ```
-./run-gow --platform headless --app pcsx2 up
+./run-gow --gpu nvidia --platform headless --app pcsx2 up
 ```
 
 If everything went right, you should see pcsx2 window shown in your moonlight client. Still we cannot play, yet. We need the bios and the games. Let's do this then.
@@ -928,13 +958,13 @@ volumes:
 To start Games on Whales in the background, run this command:
 
 ```
-./run-gow --platform headless --app pcsx2 up -d
+./run-gow --gpu nvidia --platform headless --app pcsx2 up -d
 ```
 
 To stop the service, run this:
 
 ```
-./run-gow --platform headless --app pcsx2 down -d
+./run-gow --gpu nvidia --platform headless --app pcsx2 down -d
 ```
 
 This should make Games on Whales restart after a reboot.
@@ -942,3 +972,7 @@ This should make Games on Whales restart after a reboot.
 Reboot your VM and check if the service is back up on-line.
 
 This should be it, WE'RE DONE!!!
+
+## References
+
+[https://linuxhint.com/nvidia-gpu-docker-containers-debian-11/#post-295282-_Toc125512693](https://linuxhint.com/nvidia-gpu-docker-containers-debian-11/#post-295282-_Toc125512693)
