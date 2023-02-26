@@ -477,7 +477,7 @@ cat << "EOF" > compose/apps/pcsx2.yml
 # pcsx2.yml
 #########################
 #
-# This container runs RetroArch
+# This container runs PCSX2
 
 services:
   ####################
