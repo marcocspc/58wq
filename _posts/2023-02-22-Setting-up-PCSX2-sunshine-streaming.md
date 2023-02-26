@@ -105,9 +105,7 @@ Tue Feb 21 19:07:04 2023
 +-----------------------------------------------------------------------------+
 ```
 
-## Installing NVIDIA container toolkit
-
-Let's install NVidia Container Toolkit (needed to use GPU drivers inside the container). First, install curl:
+Also, let's install NVidia Container Toolkit (needed to use GPU drivers inside the container). First, install curl:
 
 ```
 apt install curl -y
@@ -122,7 +120,7 @@ curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dear
 Then we create the apt source list file:
 
 ```
-cat << "EOF"> /etc/apt/sources.list.d/nvidia-container-toolkit.list
+cat << "EOF" > /etc/apt/sources.list.d/nvidia-container-toolkit.list
 deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://nvidia.github.io/libnvidia-container/stable/debian11/$(ARCH) /
 EOF
 ```
@@ -134,7 +132,6 @@ apt update && apt install -y nvidia-docker2
 ```
 
 Reboot so changes can take effect!!
-
 
 ## QEMU Agent
 
@@ -782,3 +779,7 @@ This should make Games on Whales restart after a reboot.
 Reboot your VM and check if the service is back up on-line.
 
 This should be it, WE'RE DONE!!!
+
+## References
+
+[https://linuxhint.com/nvidia-gpu-docker-containers-debian-11/#post-295282-_Toc125512693](https://linuxhint.com/nvidia-gpu-docker-containers-debian-11/#post-295282-_Toc125512693)
