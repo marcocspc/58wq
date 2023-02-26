@@ -54,6 +54,7 @@ apt-get install linux-headers-`uname -r` build-essential -y
 Run the driver installation:
 
 ```
+chmod +x ./NVIDIA-Linux-x86_64-${NVIDIA_VERSION}.run
 ./NVIDIA-Linux-x86_64-${NVIDIA_VERSION}.run
 ```
 
@@ -104,6 +105,60 @@ Tue Feb 21 19:07:04 2023
 +-----------------------------------------------------------------------------+
 ```
 
+## Installing NVIDIA container toolkit
+
+Let's install NVidia Container Toolkit (needed to use GPU drivers inside the container). First, install curl:
+
+```
+apt install curl -y
+```
+
+Now we add the GPG key:
+
+```
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+```
+
+Then we create the apt source list file:
+
+```
+cat << "EOF"> /etc/apt/sources.list.d/nvidia-container-toolkit.list
+deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://nvidia.github.io/libnvidia-container/stable/debian11/$(ARCH) /
+EOF
+```
+
+Then finally we install it:
+
+```
+apt update && apt install -y nvidia-docker2
+```
+
+Reboot so changes can take effect!!
+
+
+## QEMU Agent
+
+One thing that should be mandatory is the usage of QEMU Guest Agent. This is needed due to the necessity of some operations (like VM shutdown, in my case) to be done safely.
+
+By installing it, I was able to shutdown the VM safely when I sent a poerwoff command to the host. Since I didn't want my gaming PC to be on all the time and make my electricity bill sky-rocket, I would eventually shut it down from the network. But this would corrupt some of the guests HDD. With QEMU Guest Agent the VMs shutdown would be done gracefully.
+
+First of all, you should make sure that is it enabled in proxmox. In the web interface, by going to Datacenter > Host > Guest > Options, make sure that QEMU Guest Agent is enabled (if you've just set it, reboot the guest so changes can take effect).
+
+Once you're on the VM terminal again, run this to enable the agent:
+
+```
+systemctl enable qemu-guest-agent
+systemctl start qemu-guest-agent
+```
+
+To test it, check if it's working by running the following command **in the host**:
+
+```
+qm agent <vmid> ping
+```
+
+If no output, no error.
+
 Before running Games on Whales, we still need to configure a virtual monitor, let's do this.
 
 ## Virtual Monitor
@@ -150,6 +205,7 @@ Install docker-compose:
 
 ```
 wget -O /usr/bin/docker-compose https://github.com/docker/compose/releases/download/v2.15.0/docker-compose-linux-x86_64
+chmod +x /usr/bin/docker-compose
 ```
 
 ## Install Games on Whales
@@ -334,13 +390,13 @@ PGID=1000
 To test it, we use retroarch container. Pull the container image:
 
 ```
-./run-gow --platform headless --app retroarch pull
+./run-gow --gpu nvidia --platform headless --app retroarch pull
 ```
 
 Run it:
 
 ```
-./run-gow --platform headless --app retroarch up
+./run-gow --gpu nvidia --platform headless --app retroarch up
 ```
 
 At this point you can test if everything is working as expected. Go to https://your-vm-ip:47990/ to pair your device. You can follow [this guide](https://games-on-whales.github.io/gow/connecting.html) to know how to do this. Once you finished your testing, press Ctrl + C on your terminal to finish the containers.
@@ -348,7 +404,7 @@ At this point you can test if everything is working as expected. Go to https://y
 Once tested, bring down the containers and remove them. This is needed because we are rebuilding images ahead:
 
 ```
-./run-gow --platform headless --app retroarch down
+./run-gow --gpu nvidia --platform headless --app retroarch down
 docker container prune
 ```
 
@@ -377,9 +433,8 @@ FROM ${BASE_APP_IMAGE}
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG REQUIRED_PACKAGES=" \
-    vulkan-tools \
+    libvulkan1 \
     software-properties-common \
-    kmod \
     "
 
 RUN apt-get update && \
@@ -393,11 +448,6 @@ RUN apt-get update && \
 ENV XDG_RUNTIME_DIR=/tmp/.X11-unix
 
 COPY --chmod=777 scripts/startup.sh /opt/gow/startup-app.sh
-COPY --chmod=777 scripts/ensure-nvidia-xorg-driver.sh /opt/gow/ensure-nvidia-xorg-driver.sh
-COPY --chmod=777 scripts/99-glxinfo.sh /etc/cont-init.d/
-
-#the script will only really run if on nvidia hosts, there's an if inside it
-RUN /opt/gow/ensure-nvidia-xorg-driver.sh
 
 ARG IMAGE_SOURCE
 LABEL org.opencontainers.image.source $IMAGE_SOURCE
@@ -418,121 +468,6 @@ gow_log "Starting PCSX2"
 CFG_DIR=$HOME/.config/PCSX2
 
 exec /usr/bin/pcsx2-qt
-
-EOF
-```
-
-Another thing I've discovered while trying to debug this is that glxinfo execution before (or after) PCSX2 is running inside its container allow it to run properly. Without this is would just show an "failed to create blabla context blabla" and fail to run the game. I discovered this because once I received this message, I would launch glxinfo to check whether I was using nvidia drivers or llvm pipe as OpenGL renderer. Anyway, after launching glxinfo I tried again and everytime the game would launch as normal LOL. So following the IT JUST WORKS (tm) I decided to include this command at container startup. To do this, we create a 99-glxinfo.sh script:
-
-```
-cat << "EOF" > images/pcsx2/scripts/99-glxinfo.sh
-#!/bin/bash
-
-set -e
-
-source /opt/gow/bash-lib/utils.sh
-
-if [ -z "$DISPLAY" ]; then
-    gow_log "FATAL: No DISPLAY environment variable set.  No X."
-    exit 13
-fi
-
-gow_log "Waiting for X server..."
-# Taken from https://gist.github.com/tullmann/476cc71169295d5c3fe6
-MAX=120 # About 120 seconds
-CT=0
-while ! xdpyinfo >/dev/null 2>&1; do
-    sleep 1s
-    CT=$(( CT + 1 ))
-    if [ "$CT" -ge "$MAX" ]; then
-        gow_log "FATAL: $0: Gave up waiting for X server $DISPLAY"
-        exit 11
-    fi
-done
-
-gow_log "running glxinfo, somehow this is needed to make pcsx2 work properly"
-glxinfo > /dev/null
-EOF
-```
-
-Create the ensure-nvidia-xorg-driver.sh script:
-
-
-```
-cat << "EOF" > images/pcsx2/scripts/ensure-nvidia-xorg-driver.sh
-#!/bin/bash
-
-NVIDIA_DRIVER_MOUNT_LOCATION=/nvidia/xorg
-NVIDIA_PACKAGE_LOCATION=/usr/lib/x86_64-linux-gnu/nvidia/xorg
-
-# If the user has requested to skip the check, do so
-if [ "${SKIP_NVIDIA_DRIVER_CHECK:-0}" = "1" ]; then
-    exit
-fi
-
-fail() {
-    (
-        if [ -n "${1:-}" ]; then
-            echo "$1"
-        fi
-        echo "Xorg may fail to start; try mounting drivers from your host as a volume."
-    ) >&2
-    exit 1
-}
-
-# If there's an nvidia_drv.so in the mount location, or in the location where
-# the xserver-xorg-video-nvidia package installs to, assume it's the right one
-for d in $NVIDIA_DRIVER_MOUNT_LOCATION $NVIDIA_PACKAGE_LOCATION; do
-    if [ -f "$d/nvidia_drv.so" ]; then
-        echo "Found an existing nvidia_drv.so"
-        exit
-    fi
-done
-
-# Otherwise, try to download the correct package.
-HOST_DRIVER_VERSION=$(sed -nE 's/.*Module[ \t]+([0-9]+(\.[0-9]+)*).*/\1/p' /proc/driver/nvidia/version)
-
-if [ -z "$HOST_DRIVER_VERSION" ]; then
-    echo "Could not find NVIDIA driver; skipping"
-    exit 0
-else
-    echo "Looking for driver version $HOST_DRIVER_VERSION"
-fi
-
-download_pkg() {
-    dl_url=$1
-    dl_file=$2
-
-    echo "Downloading $dl_url"
-
-    if ! wget -q -nc --show-progress --progress=bar:force:noscroll -O "$dl_file" "$dl_url"; then
-        echo "ERROR: Unable to download $dl_file"
-        return 1
-    fi
-}
-
-DOWNLOAD_URL=https://download.nvidia.com/XFree86/Linux-x86_64/$HOST_DRIVER_VERSION/NVIDIA-Linux-x86_64-$HOST_DRIVER_VERSION.run
-DL_FILE=/tmp/nvidia-$HOST_DRIVER_VERSION.run
-EXTRACT_LOC=/tmp/nvidia-drv
-
-if [ ! -d $EXTRACT_LOC ]; then
-    if ! download_pkg "$DOWNLOAD_URL" "$DL_FILE"; then
-        echo "Couldn't download nvidia driver version $HOST_DRIVER_VERSION"
-        exit 1
-    fi
-
-    chmod +x "$DL_FILE"
-    $DL_FILE -x --target $EXTRACT_LOC
-    $DL_FILE --accept-license --no-runlevel-check --no-questions --no-backup --ui=none --no-kernel-module --no-kernel-module-source --no-nouveau-check --no-nv
-idia-modprobe
-    rm "$DL_FILE"
-fi
-
-if [ ! -d $NVIDIA_DRIVER_MOUNT_LOCATION ]; then
-    mkdir -p $NVIDIA_DRIVER_MOUNT_LOCATION
-fi
-
-cp "$EXTRACT_LOC/nvidia_drv.so" "$EXTRACT_LOC/libglxserver_nvidia.so.$HOST_DRIVER_VERSION" "$NVIDIA_DRIVER_MOUNT_LOCATION"
 
 EOF
 ```
@@ -589,111 +524,16 @@ services:
 EOF
 ```
 
-OK! With this we have all the PCSX2 docker files and scripts in place. But there is still a few modifications to go. Unfortunately, while reading and trying to troubleshoot why the container wouldn't run with GPU acceleration, I've discoreved that the NVIDIA driver needed to be installed in both pcsx2 and xorg containers. In the xorg one there was already a script to do this, but this code did some magic extraction that, while made available the .so files needed by xorg to run, the software would still complain and fall back to software rendering. I was able to fix this by properly running the driver instllation binary inside the container at creation time. To do this, I needed to alter the ensure-nvidia-xorg-driver.sh script, so we can just repurpose the pcsx2 one:
-
-```
-cp images/pcsx2/scripts/ensure-nvidia-xorg-driver.sh images/xorg/scripts/ensure-nvidia-xorg-driver.sh
-```
-
-Still, to make this work, we need to edit xorg compose file to force rebuilding the image (instead of just pulling from dockerhub). To do this, we need to remove the line "image: (...)" and uncommenting the "build" lines inside headless.yml:
-
-```
-vim compose/platforms/headless.yml
-```
-
-Find this section:
-
-```
-...
-services:                                                                                                                                                    
-  xorg:                                       
-    restart: always
-    image: ghcr.io/games-on-whales/xorg:edge
-    # Most people will probably prefer to pull the pre-built images, but if you
-    # prefer to build yourself you can uncomment these lines
-#   build:
-#     context: ./images/xorg
-#     args:
-#       BASE_IMAGE: ${BUILD_BASE_IMAGE}
-#       BASE_APP_IMAGE: ${BUILD_BASE_APP_IMAGE}
-    runtime: ${DOCKER_RUNTIME}
-...
-```
-
-And turn it into this:
-
-```
-...
-services:
-  xorg:
-    restart: always
-    # Most people will probably prefer to pull the pre-built images, but if you
-    # prefer to build yourself you can uncomment these lines
-    build:
-      context: ./images/xorg
-      args:
-        BASE_IMAGE: ${BUILD_BASE_IMAGE}
-        BASE_APP_IMAGE: ${BUILD_BASE_APP_IMAGE}
-    runtime: ${DOCKER_RUNTIME}
-...
-```
-
-Also edit xorg Dockerfile to include kmod as a required package:
-
-```
-vim images/xorg/Dockerfile
-```
-
-Find this section:
-
-```
-...
-ARG REQUIRED_PACKAGES=" \
-    wget \
-    xserver-xorg-core xcvt xfonts-base x11-apps \
-    x11-session-utils x11-utils x11-xfs-utils \
-    x11-xserver-utils xauth x11-common \
-    xz-utils unzip avahi-utils dbus \
-    mesa-utils mesa-utils-extra \
-    vulkan-tools \
-    libgl1-mesa-glx libgl1-mesa-dri libglu1-mesa \
-    xserver-xorg-video-all \
-    xserver-xorg-input-libinput \
-    jwm libxft2 libxext6 breeze-cursor-theme \
-    "
-...
-```
-
-And add kmod besides wget, like this:
-
-```
-...
-ARG REQUIRED_PACKAGES=" \
-    wget kmod \
-    xserver-xorg-core xcvt xfonts-base x11-apps \
-    x11-session-utils x11-utils x11-xfs-utils \
-    x11-xserver-utils xauth x11-common \
-    xz-utils unzip avahi-utils dbus \
-    mesa-utils mesa-utils-extra \
-    vulkan-tools \
-    libgl1-mesa-glx libgl1-mesa-dri libglu1-mesa \
-    xserver-xorg-video-all \
-    xserver-xorg-input-libinput \
-    jwm libxft2 libxext6 breeze-cursor-theme \
-    "
-...
-```
-
 Build the images using the command below:
 
 ```
-./run-gow --platform headless --app pcsx2 build
+./run-gow --gpu nvidia --platform headless --app pcsx2 build
 ```
 
 To test (after the long process of image building), use:
 
 ```
-./run-gow --platform headless --app pcsx2 up
+./run-gow --gpu nvidia --platform headless --app pcsx2 up
 ```
 
 If everything went right, you should see pcsx2 window shown in your moonlight client. Still we cannot play, yet. We need the bios and the games. Let's do this then.
@@ -928,13 +768,13 @@ volumes:
 To start Games on Whales in the background, run this command:
 
 ```
-./run-gow --platform headless --app pcsx2 up -d
+./run-gow --gpu nvidia --platform headless --app pcsx2 up -d
 ```
 
 To stop the service, run this:
 
 ```
-./run-gow --platform headless --app pcsx2 down -d
+./run-gow --gpu nvidia --platform headless --app pcsx2 down -d
 ```
 
 This should make Games on Whales restart after a reboot.
