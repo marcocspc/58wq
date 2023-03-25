@@ -67,4 +67,4 @@ I've tcpdumped the connection logs while trying to ping6 google.com on my mac. W
 #	option ula_prefix 'fd27:70fa:5c1d::/48'
 ```
 
-Then rebooted the router and everything started working. After so much work researching and testing, I was able to comfortably navigate the internet using my phone's plan in my switch and my macbook.
+Then rebooted the router and everything started working. After so much work researching and testing, I was able to comfortably navigate the internet using my phone's plan in my macbook.
