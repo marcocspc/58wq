@@ -2,10 +2,10 @@
 layout: post
 title:  "Setting up my RP-WD009 with OpenWRT"
 date:  2021-10-19 11:50:53 -0300 
-categories: english linux
+categories: english linux openwrt
 ---
 
-# Setting up my RP-WD009 with OpenWRT 
+# Setting up my Portable Router (RP-WD009) with OpenWRT 
 
 I am not an anxious person. I mean, I've been waiting, like, an eternity for my RPWD009 to arrive (it was three weeks lol). Ok, I may be a bit excited, but today I got my portable router from Ravpower, and the first thing I did was to flash it with OpenWRT.
 
@@ -24,12 +24,12 @@ ssh root@192.168.1.1
 After this, I'd like to set some environment variables. Every guide I write, I do this to help me change configurations if needed in the future:
 
 ```
-export MY_HOSTNAME="juno"
 export MY_TIMEZONE="<-03>3" #america/fortaleza
 export NTP_SERVER_A="a.ntp.br"
 export NTP_SERVER_B="b.ntp.br"
 export NTP_SERVER_C="c.ntp.br"
-export WWAN_WIFI_NAME="shadow"
+read -p "MY_HOSTNAME: " MY_HOSTNAME ;\
+read -p "WWAN_WIFI_NAME: " WWAN_WIFI_NAME ;\
 read -p "WWAN_WIFI_PASSWORD: " WWAN_WIFI_PASSWORD ;\
 read -p "MAIN_WIFI_NAME: " MAIN_WIFI_NAME ;\
 read -p "MAIN_WIFI_PASSWORD: " MAIN_WIFI_PASSWORD ;\
@@ -48,8 +48,6 @@ passwd
 Set system name, timezone and ntp servers:
 
 ```
-uci delete system.@system[0].hostname
-uci delete system.@system[0].timezone
 uci delete system.ntp.server
 uci set system.@system[0].hostname="$MY_HOSTNAME"
 uci set system.@system[0].timezone="$MY_TIMEZONE"
@@ -69,6 +67,7 @@ This router, as many of the current generation of routers, have two wireless dev
 ```
 uci delete wireless.default_radio0
 uci delete wireless.default_radio1
+# 2G
 uci set wireless.default_radio0=wifi-iface
 uci set wireless.default_radio0.device='radio0'
 uci set wireless.default_radio0.network='lan'
@@ -77,11 +76,12 @@ uci set wireless.default_radio0.ssid=$MAIN_WIFI_NAME
 uci set wireless.default_radio0.encryption='sae-mixed'
 uci set wireless.default_radio0.ieee80211w='1'
 uci set wireless.default_radio0.key=$MAIN_WIFI_PASSWORD
+# 5G
 uci set wireless.default_radio1=wifi-iface
 uci set wireless.default_radio1.device='radio1'
 uci set wireless.default_radio1.network='lan'
 uci set wireless.default_radio1.mode='ap'
-uci set wireless.default_radio1.ssid=$MAIN_WIFI_NAME
+uci set wireless.default_radio1.ssid=$MAIN_WIFI_NAME-5g
 uci set wireless.default_radio1.encryption='sae-mixed'
 uci set wireless.default_radio1.ieee80211w='1'
 uci set wireless.default_radio1.key=$MAIN_WIFI_PASSWORD
@@ -92,8 +92,22 @@ If you want to enable wifi now:
 ```
 uci set wireless.radio0.disabled='0'
 uci set wireless.radio1.disabled='0'
+uci set wireless.radio0.enabled='1'
+uci set wireless.radio1.enabled='1'
+uci set wireless.default_radio0.disabled='0'
+uci set wireless.default_radio1.disabled='0'
+uci set wireless.default_radio0.enabled='1'
+uci set wireless.default_radio1.enabled='1'
 wifi
 ```
+
+If your 5G wifi is not showing, and your 5G led is off, try:
+
+- Check iwinfo: `iwinfo phy1 info`
+- Check if wlan1 is showing under ip command: `ip a`
+- Check if wlan1 link is up: `ip link set wlan1 up`
+- Check if country code is enabled: `uci show wireless.radio1.country`
+- If needed to set country code: `uci set wireless.radio1.country='BR'`
 
 ## Enable Guest Wifi
 
@@ -103,6 +117,7 @@ The [official OpenWRT guide](https://openwrt.org/docs/guide-user/network/wifi/gu
 ```
 # Configuration parameters
 WIFI_DEV="$(uci get wireless.@wifi-iface[0].device)"
+WIFI_DEV_5G="$(uci get wireless.@wifi-iface[3].device)"
 
 # Set up guest WLAN
 uci delete network.guest_dev
@@ -113,9 +128,10 @@ uci delete network.guest
 uci set network.guest=interface
 uci set network.guest.proto=static
 uci set network.guest.device=br-guest
-uci set network.guest.ipaddr=192.10.11.0
+uci set network.guest.ipaddr=192.10.11.1
 uci set network.guest.netmask=255.255.255.0
 uci commit network
+# 2G
 uci delete wireless.guest
 uci set wireless.guest=wifi-iface
 uci set wireless.guest.device=$WIFI_DEV
@@ -123,8 +139,18 @@ uci set wireless.guest.mode=ap
 uci set wireless.guest.network=guest
 uci set wireless.guest.ssid=$GUEST_WIFI_NAME
 uci set wireless.guest.key=$GUEST_WIFI_PASSWORD
-uci set wireless.guest.encryption=none
+uci set wireless.guest.encryption=psk2
 uci set wireless.guest.disabled=1
+# 5G
+uci delete wireless.guest5g
+uci set wireless.guest5g=wifi-iface
+uci set wireless.guest5g.device=$WIFI_DEV_5G
+uci set wireless.guest5g.mode=ap
+uci set wireless.guest5g.network=guest
+uci set wireless.guest5g.ssid=$GUEST_WIFI_NAME-5G
+uci set wireless.guest5g.key=$GUEST_WIFI_PASSWORD
+uci set wireless.guest5g.encryption=psk2
+uci set wireless.guest5g.disabled=1
 uci commit wireless
 uci delete dhcp.guest
 uci set dhcp.guest=dhcp
@@ -170,28 +196,23 @@ If you want to enable the guest wifi now:
 
 ```
 uci set wireless.guest.disabled=0
+uci set wireless.guest5g.disabled=0
 wifi
 ```
 
-## My indecision
+If your 5G wifi is not showing, and your 5G led is off, try:
 
-I'm really undecided if I use this particular router with travelmate or not. For those uninitiated, travelmate is a fantastic tool for those who use portable routers. The software creates a sta interface (a wifi device capable of connecting to wireless APs and treat them as upstream wan) and manages wifi connections for you. When it cannot reach internet, it enables your wireless station so you can set up another wwan ap. 
-
-This is needed due to the openwrt's nature of disabling your wireless lan if it cannot associate with a set up AP. I have an old rp-wd02 with only one 2.4Ghz radio, which remained off when it disconnected from upstream wifi, and I could not set it up again until I got an ethernet cable to connect to it. The problem was that it was not every time I had such cable. I used travelmate on this router, which fixed the problem, but it was a really tough load for this tiny router.
-
-I fear the same could happen to my new rp-wd009. But it has a way stronger CPU which could handle the load. Beyond that, it has... BUTTONS! Yes, the router comes with four buttons: one to copy data from the sd card slot to a plugged usb device, one to turn on and off wifi and one reset and power buttons. My old rp-wd02 had only two buttons: power and reset. Power was not configurable, while reset was, but even if I did the nonsense of overwrite the reset button's default behavior, it was not an easy button to reach.
-
-Anyway, apart from the reset and power buttons, those two other buttons I mentioned above (from the rp-wd009), are configurable. I mean, all four buttons might be configurable, but I'm not going to mess with the power and reset buttons. Those other two, I'm going to call them copy-button and wifikill-button, to make easier to me mention them as I write this.
-
-I could, then, set up the wifikill-button to turn on and off the sta interface and always have the main wifi available when needed. This would vanish the need to use travelmate. On the other hand, travelmate has an excellent web interface for Luci, which makes a lot easier to connect to new aps. And it remembers the associated wifis, automatically connecting to them as they are available. But it also may keep turning off the wifi as it is not able to associate to multiple stations. It is a hard decision on which path to take, you know.
-
-BUT! As I wrote this, I had an idea: WHY NOT BOTH? <insert meme here>. I could map the wifikill button to disable both the sta interface and travelmate, if those generated some kind of problem. Se here I go!
+- Check iwinfo: `iwinfo phy1 info`
+- Check if wlan1 is showing under ip command: `ip a`
+- Check if wlan1 link is up: `ip link set wlan1 up`
+- Check if country code is enabled: `uci show wireless.radio1.country`
+- If in need to set country code: `uci set wireless.radio1.country='BR'`
 
 ## Travelmate
 
-Before setting the wifikill button, I'm going to install travelmate because it creates a custom wwan interface. In the past I've tried to modify this interface's name, but I never fully understood how travelmate set up its configurations and couldn't modify to make it work.
+I'm going to install travelmate because it really helps the portable router owner. It creates a custom WWAN interface and, in the past, I've tried to modify this interface's name, but I never fully understood how travelmate set up its configurations and couldn't modify to make it work. But the advantages this little guy gives us, like auto switching multiple hotspots or even reconnecting if the connection fails, are priceless.
 
-To install it, though, I need to set up a wwan interface manually, this is what I do here:
+To install it, though, I need first to set up a wwan interface manually, this is what I do here:
 
 ```
 uci delete wireless.wwan_radio0
@@ -199,14 +220,14 @@ uci set wireless.wwan_radio0=wifi-iface
 uci set wireless.wwan_radio0.device='radio0'
 uci set wireless.wwan_radio0.network='wwan'
 uci set wireless.wwan_radio0.mode='sta'
-uci set wireless.wwan_radio0.ssid=$WWAN_WIFI_NAME
+uci set wireless.wwan_radio0.ssid="$WWAN_WIFI_NAME"
 uci set wireless.wwan_radio0.encryption='psk2'
-uci set wireless.wwan_radio0.key=$WWAN_WIFI_PASSWORD
+uci set wireless.wwan_radio0.key="$WWAN_WIFI_PASSWORD"
 uci delete network.wwan
 uci set network.wwan=interface
 uci set network.wwan.device=wlan0
 uci set network.wwan.proto=dhcp
-uci add_list firewall.@zone[1]='wwan'
+uci add_list firewall.@zone[1].network='wwan'
 ```
 
 Enable it:
@@ -214,7 +235,7 @@ Enable it:
 ```
 uci set wireless.wwan_radio0.enabled=1
 uci set wireless.radio0.disabled=0
-/etc/init.d/networking restart
+/etc/init.d/network restart
 /etc/init.d/firewall restart
 wifi
 ```
@@ -240,6 +261,33 @@ round-trip min/avg/max = 54.984/55.336/55.824 ms
 
 IT WORKED!
 
+If it didn't work, check if the radio is connected:
+
+```
+iwinfo 
+```
+
+Also, check your LAN IP address and see if it doesn't have any conflict with WWAN IP:
+
+```
+#check each route IP
+ip route
+/etc/init.d/network restart
+```
+
+To change you router LAN IP run this (you'll lose SSH connection):
+
+```
+uci set network.lan.ipaddr='YOUR.IP'
+uci 
+```
+
+**IF** (and only if) you were able to connect again to your router, commit the changes:
+
+```
+uci commit
+```
+
 Now we can proceed and install travelmate:
 
 ```
@@ -252,14 +300,14 @@ Now let's undo our wwan interface, so we can let travelmate do it's stuff:
 ```
 uci delete wireless.wwan_radio0
 uci delete network.wwan
-/etc/init.d/networking restart
+/etc/init.d/network restart
 /etc/init.d/firewall restart
 wifi
 ```
 
 We go now to the web interface, so we can start the travelmate setup;
 
-- Go to the default router IP (mine 192.168.1.1);
+- Go to your router IP;
 - Login with root and your password;
 - Go to Services -> Travelmate;
 - Click on Interface Wizard;
@@ -295,9 +343,125 @@ PING 8.8.8.8 (8.8.8.8): 56 data bytes
 round-trip min/avg/max = 54.984/55.336/55.824 ms
 ```
 
-Now, finally let's go for the button!
+This ends this section.
 
-## The wifikill button
+## Updating the firmware
+
+To update the firmware, we can first check the latest stable release of OpenWRT:
+
+```
+curl -s "https://downloads.openwrt.org/releases/" | grep href | grep -v '(root)' | grep -v KeyCDN | grep -v faillogs | grep -v 'packages-' | sed s/'<\/a>.*'/''/ | sed s/'<tr><td class="n">'/''/ | cut -d'>' -f2 | grep -v '\-rc' | sort | tail -n1
+```
+
+Then compare to the installed version:
+
+```
+cat /etc/banner
+```
+
+If they are different, let's download the latest firmware:
+
+```
+export LATEST_VERSION=$(curl -s "https://downloads.openwrt.org/releases/" | grep href | grep -v '(root)' | grep -v KeyCDN | grep -v faillogs | grep -v 'packages-' | sed s/'<\/a>.*'/''/ | sed s/'<tr><td class="n">'/''/ | cut -d'>' -f2 | grep -v '\-rc' | sort | tail -n1)
+)
+wget -O /tmp/firmware.bin https://downloads.openwrt.org/releases/$LATEST_VERSION/targets/ramips/mt76x8/openwrt-$LATEST_VERSION-ramips-mt76x8-ravpower_rp-wd009-squashfs-sysupgrade.bin
+```
+
+**WARNING**: proceed only if you are sure to continue, since upgrades can make you lose all the configuration/installed packages.
+
+To install the update keeping the configuration, run this command:
+
+```
+sysupgrade -v /tmp/firmware.bin
+```
+
+PS.: After running this command I had to reinstall travelmate. Luckily, trm_wwan was still enabled and I was able to `opkg update` and `opkg install travelmate` again.
+
+## Ethernet USB
+
+Maybe it's a driver issue, maybe it's just the driver itself. The thing is: RP-WD009 (at least in openwrt) won't work properly if the ethernet port is set to be WAN instead of LAN. The device simply won't get any IP from upstream DHCP, so even if I tried multiple times this wouldn't work.
+
+But! I got a plan B, which would be to use an Ethernet USB. This chapter of this post will have the responsibility to cover this part.
+
+The USB adapter a usually carry with me (to use with my Macbook Air) is the TP-Link UE300. According to [this link](https://forum.openwrt.org/t/solved-raspberry-pi-4-and-tp-link-ue300-usb-ethernet-dongle/56167) the package of this driver should be `kmod-usb-net-rtl8152`. To install it, we can proceed like this:
+
+```
+opkg update
+opkg install kmod-usb-net-rtl8152
+```
+
+After the installation is complete, connect the adapter in the USB port and it should be shown as eth1:
+
+```
+ip a s dev eth1
+```
+
+Then we can proceed to create a br-wan bridge and use it as a wan interface:
+
+```
+uci set network.wan_bridge=device
+uci set network.wan_bridge.type='bridge'
+uci set network.wan_bridge.name='br-wan'
+```
+
+Now create the interface:
+
+```
+uci set network.wan=interface
+uci set network.wan.proto='dhcp'
+uci set network.wan.device='br-wan'
+```
+
+## Quick commands to switch ethernet port functionality
+
+**WARNING**: before proceeding, make sure you are able to connect to the router via wi-fi. One wrong step and you'll need to reset the router completely. So be advised.
+
+So, connect to the router via your LAN wi-fi and open a ssh connection to it again.
+
+By default, the ethernet port work as a LAN port. Before switching it to WAN, we need to create the WAN interface. To do this, run these commands:
+
+Now we create the wired wan interface:
+
+```
+uci set network.wan=interface
+uci set network.wan.proto='dhcp'
+```
+
+Apply changes:
+
+```
+uci commit
+/etc/init.d/network restart 
+```
+
+Now remove the ethernet port from LAN:
+
+```
+uci del network.@device[0].ports
+```
+
+Add this ethernet port to WAN:
+
+```
+uci set network.wan.device='eth0'
+```
+
+Apply changes:
+
+```
+uci commit
+/etc/init.d/network restart 
+```
+
+Now connect the ethernet cable and check if you get any IP.
+
+```
+ip a s dev br-wan
+```
+
+## The "ethernet mode switcher" button
+
+This is one of the advantages of using linux based systems on our devices: **RIDICULOUSLY HIGH CUSTOMIZATION LEVELS**. The RP-WD009 router comes with two push buttons. The objective here is to set one of them to alter the ethernet state in case we want to use it as a LAN or WAN port.
 
 As [this openwrt guide shows](https://openwrt.org/docs/guide-user/hardware/hardware.button#hotplug_buttons) we should start by testing which button we want. But as this documentation of mine is specific to the rp-wd009, I already know which button I want to use. OpenWRT shows it under the "rfkill" label. So we are going to use it.
 
