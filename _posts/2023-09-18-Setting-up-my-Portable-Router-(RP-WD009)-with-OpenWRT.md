@@ -1,17 +1,13 @@
 ---
 layout: post
-title:  "Setting up my RP-WD009 with OpenWRT"
-date:  2021-10-19 11:50:53 -0300 
+title:  "Setting up my Portable Router (RP-WD009) with OpenWRT"
+date:  2023-09-18 22:26:13 -0300 
 categories: english linux openwrt
 ---
 
 # Setting up my Portable Router (RP-WD009) with OpenWRT 
 
-I am not an anxious person. I mean, I've been waiting, like, an eternity for my RPWD009 to arrive (it was three weeks lol). Ok, I may be a bit excited, but today I got my portable router from Ravpower, and the first thing I did was to flash it with OpenWRT.
-
-I should have done a backup first, but... Well, things went good, so no worries. Oh, and I have followed [this](https://openwrt.org/toh/ravpower/rp-wd009#oem_installation_using_the_tftp_method) to flash it, if you're curious how I did it.
-
-Anyway, here I'll be taking notes about everything I do to modify the default configurations in the stock openwrt image. I'll document my efforts to the future, if I need somehow to do them again.
+Here I'll be taking notes about everything I do to modify the default configurations in the stock openwrt image of my portable router (RP-WD009). I'll document my efforts to the future, if I need somehow to do them again.
 
 ## First things first
 
@@ -112,7 +108,6 @@ If your 5G wifi is not showing, and your 5G led is off, try:
 ## Enable Guest Wifi
 
 The [official OpenWRT guide](https://openwrt.org/docs/guide-user/network/wifi/guestwifi/configuration_command_line_interface) has already an excelent script that sets everything related to guest wifi for you. Here I make three adaptations: use my variables, set the password (the original script does not set any password) and make the wifi disabled by default (we enable it afterwards, like we did before with the main wifi).
-
 
 ```
 # Configuration parameters
@@ -279,7 +274,7 @@ To change you router LAN IP run this (you'll lose SSH connection):
 
 ```
 uci set network.lan.ipaddr='YOUR.IP'
-uci 
+/etc/init.d/network restart
 ```
 
 **IF** (and only if) you were able to connect again to your router, commit the changes:
@@ -381,7 +376,7 @@ PS.: After running this command I had to reinstall travelmate. Luckily, trm_wwan
 
 Maybe it's a driver issue, maybe it's just the driver itself. The thing is: RP-WD009 (at least in openwrt) won't work properly if the ethernet port is set to be WAN instead of LAN. The device simply won't get any IP from upstream DHCP, so even if I tried multiple times this wouldn't work.
 
-But! I got a plan B, which would be to use an Ethernet USB. This chapter of this post will have the responsibility to cover this part.
+But! I got a plan B, which would be to use an Ethernet USB. 
 
 The USB adapter a usually carry with me (to use with my Macbook Air) is the TP-Link UE300. According to [this link](https://forum.openwrt.org/t/solved-raspberry-pi-4-and-tp-link-ue300-usb-ethernet-dongle/56167) the package of this driver should be `kmod-usb-net-rtl8152`. To install it, we can proceed like this:
 
@@ -412,19 +407,10 @@ uci set network.wan.proto='dhcp'
 uci set network.wan.device='br-wan'
 ```
 
-## Quick commands to switch ethernet port functionality
-
-**WARNING**: before proceeding, make sure you are able to connect to the router via wi-fi. One wrong step and you'll need to reset the router completely. So be advised.
-
-So, connect to the router via your LAN wi-fi and open a ssh connection to it again.
-
-By default, the ethernet port work as a LAN port. Before switching it to WAN, we need to create the WAN interface. To do this, run these commands:
-
-Now we create the wired wan interface:
+Now add the device to the br-wan bridge:
 
 ```
-uci set network.wan=interface
-uci set network.wan.proto='dhcp'
+uci set network.wan_bridge.ports='eth1'
 ```
 
 Apply changes:
@@ -434,34 +420,9 @@ uci commit
 /etc/init.d/network restart 
 ```
 
-Now remove the ethernet port from LAN:
+## The travelmate button
 
-```
-uci del network.@device[0].ports
-```
-
-Add this ethernet port to WAN:
-
-```
-uci set network.wan.device='eth0'
-```
-
-Apply changes:
-
-```
-uci commit
-/etc/init.d/network restart 
-```
-
-Now connect the ethernet cable and check if you get any IP.
-
-```
-ip a s dev br-wan
-```
-
-## The "ethernet mode switcher" button
-
-This is one of the advantages of using linux based systems on our devices: **RIDICULOUSLY HIGH CUSTOMIZATION LEVELS**. The RP-WD009 router comes with two push buttons. The objective here is to set one of them to alter the ethernet state in case we want to use it as a LAN or WAN port.
+This is one of the advantages of using linux based systems on our devices: **RIDICULOUSLY HIGH CUSTOMIZATION LEVELS**. The RP-WD009 router comes with two push buttons. The objective here is to set one of them to enable or disable travelmate.
 
 As [this openwrt guide shows](https://openwrt.org/docs/guide-user/hardware/hardware.button#hotplug_buttons) we should start by testing which button we want. But as this documentation of mine is specific to the rp-wd009, I already know which button I want to use. OpenWRT shows it under the "rfkill" label. So we are going to use it.
 
@@ -472,34 +433,20 @@ cat <<"EOF" > /usr/sbin/travelmate_onoff.sh
 #!/bin/ash
 
 disable() {
-    #set all trm_uplink to disabled
-    logger "Disabling all trm_uplink interfaces"
-    for i in $(uci show wireless | grep trm_uplink | grep disabled | awk -F. '{print $2}') ; do
-        uci set "wireless.$i.disabled=1"
-    done
-    #commit changes
-    uci commit
     #stop travelmate
     logger "Stopping travelmate"
     /etc/init.d/travelmate stop
-    #reset wifi
-    logger "Resetting wifi"
-    wifi
 }
 
 enable() {
-    #Here we don't need to neither reenable trm_uplink
-    #(because we cannot know which one was previously
-    #enabled) or restart wifi. Leave those operations for
-    #travelmate. 
-    #So we just start travelmate
+    #start travelmate
     logger "Starting travelmate"
     /etc/init.d/travelmate start 
 }
 
 main() {
     #Check if travelmate is enabled:
-    if [ -f /tmp/trm_runtime.json ] && [[ "$(cat /tmp/trm_runtime.json)" != ""]] ; then
+    if [ -f /tmp/trm_runtime.json ] && [ -s /tmp/trm_runtime.json ] ; then
         logger "travelmate is enabled, disabling it"
         disable
     else
@@ -536,6 +483,12 @@ fi
 EOF
 ```
 
+Make it executable:
+
+```
+chmod +x /etc/hotplug.d/button/buttons
+```
+
 To test it, take a look at logread. You should see the sentences like "Travelmate enabled. disabling it":
 
 ```
@@ -545,10 +498,15 @@ logread -f -e "abled"
 
 This should do for the wifikill-button. ;)
 
-## The copy-button
+## Battery indicator
 
-I was not going to use the copy-button. But then I thought: the rp-wd009, like my old one, have only one ethernet port. It would be amazing if I could change it's state to wan or lan with the press of a... what? What? A BUTTON! That's right!
+So, to finish this, let's just install something to show the battery percentage in Luci's web ui:
 
-Before proceeding, batter make sure that both radios are enabled and the wifi is working, so we can set things up for the cable connection:
+```
+opkg update
+opkg install luci-mod-battstatus
+```
 
-### TODO wifi não tava funcionando quando eu tentei conectar, ver isso hein
+## Finishing
+
+Finally, after two years of coming back to this post, I can finally release it. VPN connection will be on a new chapter of this. WE'RE DONE!!!
