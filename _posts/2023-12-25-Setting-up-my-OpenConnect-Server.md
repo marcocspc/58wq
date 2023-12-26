@@ -306,8 +306,6 @@ If needed, repeat these steps to add new clients.
 
 ## Revoking certificates 
 
-#TODO this kind of certificate revogation is not working, try to do with connect.sh instead
-
 To remove clients (prevent them from logging in the VPN again), the UID should be removed from the ocpasswd file and the certificate added to a Certificate Revocation List (CRL).
 
 In order to do that, a CRL template must be generated:
