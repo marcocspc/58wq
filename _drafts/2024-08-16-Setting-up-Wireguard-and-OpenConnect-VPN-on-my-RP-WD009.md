@@ -156,7 +156,7 @@ Another thing I'd like to do is to block any access to my lan hosts on the serve
 
 In order to perform that, I need to use iptables and block all the connections. Let me do this on wireguard first.
 
-### Blocking things on Wireguard (WIP NOT WORKING YET)
+### Blocking things on Wireguard 
 
 On `wg0.conf` I have a structure that looks like this:
 
@@ -174,16 +174,144 @@ These commands are executed in order, when the wg interface is brought up and do
 
 What I need to do is to add a few PostUp lines that look like the following one:
 ```
-iptables -A INPUT -s ROUTER_VPN_IP_ADDRESS/32 -d NETWORK_ADDRESS/NETMASK -j DROP
+iptables -I FORWARD -i %i -s ROUTER_VPN_IP_ADDRESS -d NETWORK_ADDRESS/NETMASK -j DROP
 ```
 
 For instance, if I wanted to block all the connections to a 172.10.13.0/24 network, the following lines should be added to the file:
 
 ```
 (...)
-PostUp = iptables -A INPUT -s ROUTER_VPN_IP_ADDRESS/32 -d 172.10.13.0/24 -j DROP
+PostUp = iptables -I FORWARD -i %i -s ROUTER_VPN_IP_ADDRESS -d 172.10.13.0/24 -j DROP
 (...)
-PostDown = iptables -D INPUT -s ROUTER_VPN_IP_ADDRESS/32 -d 172.10.13.0/24 -j DROP
+PostDown = iptables -D FORWARD -i %i -s ROUTER_VPN_IP_ADDRESS -d 172.10.13.0/24 -j DROP
+```
+That should do it.
+
+### Blocking things on OpenConnect
+
+On the OpenConnect side of things, there are two scripts that are ran every time a new host connects and disconnects to the VPN. They're called `connect.sh` and `disconnect.sh`, respectively.
+
+This is the content of each:
+
+
+```
+## connect.sh
+#!/bin/bash                                                                        
+        
+echo "$(date) User ${USERNAME} Connected - Server: ${IP_REAL_LOCAL} VPN IP: ${IP_REMOTE}  Remote IP: ${IP_REAL} Device:${DEVICE}"                                                                                             
+echo "Running iptables MASQUERADE for User ${USERNAME} connected with VPN IP ${IP_REMOTE}"        
+iptables -t nat -A POSTROUTING -s ${IP_REMOTE}/32 -o eth0 -j MASQUERADE  
 ```
 
-That should do it.
+```
+## disconnect.sh
+
+#!/bin/bash    
+    
+echo "$(date) User ${USERNAME} Disconnected - Bytes In: ${STATS_BYTES_IN} Bytes Out: ${STATS_BYTES_OUT} Duration:${STATS_DURATION}"
+```
+
+What I need to do, then, is to create an `if` structure to check if the username $VPN_USER is connecting and apply the iptables rules. Here's the script contents after the modification (the disconnect one do not need to be updated). By the way, I should replace the $VPN_USER, $BLOCKED_NETWORK and $NETMASK with actual values:
+
+```
+## connect.sh
+#!/bin/bash                                                                        
+                                                                             
+echo "$(date) User ${USERNAME} Connected - Server: ${IP_REAL_LOCAL} VPN IP: ${IP_REMOTE}  Remote IP: ${IP_REAL} Device:${DEVICE}"                                                                                                                               
+echo "Running iptables MASQUERADE for User ${USERNAME} connected with VPN IP ${IP_REMOTE}"                     
+iptables -t nat -A POSTROUTING -s ${IP_REMOTE}/32 -o eth0 -j MASQUERADE         
+                                                                                                                                          
+#If the connection is coming from the portable router, block access to a few networks (I only want the VPN to provide internet access)    
+if [[ "${USERNAME}" == "$VPN_USER" ]]; then          
+    #add more lines here for multiple networks
+    iptables -I FORWARD -i ${DEVICE} -d $BLOCKED_NETWORK/$NETMASK -j DROP                    
+fi  
+```
+
+That should be it for OpenConnect.
+
+## Load balancing through multiple VPNs (WIP)
+
+Finally, as described [here](https://openwrt.org/docs/guide-user/routing/examples/dual-wan), I can use mwan3 to allow openwrt to do a failover in case one of the vpns stops working. Before anything, I need to install the package:
+
+```
+opkg update 
+opkg install mwan3
+```
+
+Now I export some useful variables so it makes the configuration simpler:
+
+```
+# membername variables are just for titles, they cannot have a dash (-) character included
+export WG_MEMBERNAME="example-name"
+export OC_MEMBERNAME="example-name"
+export WG_INTERFACE="example-interface"
+export OC_INTERFACE="example-interface"
+```
+
+Now I paste the configuration (copy and paste all lines at once!!) to mwan3:
+```
+cat << EOF > /etc/config/mwan3
+config globals 'globals'       
+	option mmx_mask '0x3F00'
+
+config rule 'default_rule'
+	option dest_ip '0.0.0.0/0'
+	option proto 'all'
+	option sticky '0'
+	option use_policy 'vpn_failover'
+ 
+config interface '$OC_INTERFACE'
+	option enabled '1'
+	option initial_state 'online'
+	option family 'ipv4'
+	list track_ip '8.8.8.8'
+	list track_ip '8.8.4.4'
+	option track_method 'ping'
+	option reliability '1'
+	option count '1'
+	option size '56'
+	option max_ttl '60'
+	option check_quality '0'
+	option timeout '2'
+	option down '3'
+	option up '3'
+	option interval '3'
+	option recovery_interval '3'
+	option failure_interval '3'
+ 
+config interface '$WG_INTERFACE'
+	option enabled '1'
+	option initial_state 'online'
+	option family 'ipv4'
+	list track_ip '8.8.8.8'
+	list track_ip '8.8.4.4'
+	option track_method 'ping'
+	option reliability '1'
+	option count '1'
+	option size '56'
+	option max_ttl '60'
+	option check_quality '0'
+	option timeout '2'
+	option down '3'
+	option up '3'
+	option interval '3'
+	option failure_interval '3'
+	option recovery_interval '3'
+ 
+config member '$OC_INTERFACE'
+	option interface '$OC_INTERFACE'
+	option metric '1'
+	option weight '10'
+ 
+config member '$WG_INTERFACE'
+	option interface '$WG_INTERFACE'
+	option metric '2'
+	option weight '10'
+ 
+config policy 'vpn_failover'
+	list use_member '$OC_INTERFACE'
+	list use_member '$WG_INTERFACE'
+	option last_resort 'unreachable'
+EOF
+```
