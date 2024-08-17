@@ -36,6 +36,7 @@ uci -q delete network.${VPN_IF}
 uci set network.${VPN_IF}="interface"
 uci set network.${VPN_IF}.proto="wireguard"
 uci set network.${VPN_IF}.private_key="${CLIENT_PRIVATE_KEY}"
+uci set network.${VPN_IF}.mtu="1280"
 uci add_list network.${VPN_IF}.addresses="${VPN_ADDR}"
 ```
 
@@ -122,6 +123,7 @@ uci set network.${VPN_IF}.server="${VPN_SERV}"
 uci set network.${VPN_IF}.port="${VPN_PORT}"
 uci set network.${VPN_IF}.username="${VPN_USER}"
 uci set network.${VPN_IF}.serverhash="${VPN_HASH}"
+uci set network.${VPN_IF}.mtu="1280"
 ```
 
 Add the VPN interface to WAN firewall rules:
@@ -249,6 +251,8 @@ export WG_INTERFACE="example-interface"
 export OC_INTERFACE="example-interface"
 ```
 
+Note: When trying to configure this, I was using the _hardware_ interface name (i.e. the one we find when running `ifconfig` or `ip address`), so it wasn't working. The one that should be used is the interface name set in the openconnect section of this document, which is the value for the $VPN_IF variable.
+
 Now I paste the configuration (copy and paste all lines at once!!) to mwan3:
 ```
 cat << EOF > /etc/config/mwan3
@@ -315,3 +319,21 @@ config policy 'vpn_failover'
 	option last_resort 'unreachable'
 EOF
 ```
+
+I also need to set some metrics on both interfaces, so the failover won't work:
+
+```
+export WG_VPN_IF="example-interface-name-ie-wg0"
+export OPENCONNECT_VPN_IF="example-interface-name-ie-oc0"
+uci set network.${WG_VPN_IF}.metric="20"
+uci set network.${OPENCONNECT_VPN_IF}.metric="10"
+uci commit
+```
+
+Finally, restart mwan3 and network:
+```
+/etc/init.d/network restart
+/etc/init.d/mwan3 restart
+```
+
+That should be it!
