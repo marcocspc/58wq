@@ -80,4 +80,9 @@ git add * #or git add filename
 git commit -m "something"
 ```
 
+It may be needed to create the .ssh folder inside ~/Documents:
+```
+mkdir ~/Documents/.ssh
+```
+
 That should be it!
