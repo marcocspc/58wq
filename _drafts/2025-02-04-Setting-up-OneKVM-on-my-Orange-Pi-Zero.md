@@ -19,4 +19,19 @@ The second time in which China comes to the rescue is the OneKVM project. It's a
 
 BTW that's one of the reasons to document this, I'd like to have some kind of setup documentation written in English for the folks that live on this side of the planet. I should be also making some pull requests in the future to add some localisation to the project as well, but that's a project to the future.
 
-## Downloading Armbian
+## Installing Armbian
+
+First we download it:
+```
+wget https://dl.armbian.com/orangepizero/Bookworm_current_minimal -O armbian.img.xz
+```
+
+Here I'll be using the minimal version of Armbian, as I want to keep the installation footprint as small as possible.
+
+After the download completes, the image can be written using the command below on Mac:
+```
+xzcat armbian.img.xz | sudo dd of=/dev/diskX status=progress
+```
+
+Where diskX is your SD card.
+
