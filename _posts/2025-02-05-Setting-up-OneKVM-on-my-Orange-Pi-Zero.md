@@ -21,16 +21,15 @@ BTW that's one of the reasons to document this, I'd like to have some kind of se
 
 ## Installing Armbian
 
-First we download it:
+First we download it. I'll be using the image downloaded from [here](). I really tried to use the official Armbian image, but the Keyboard/Mouse simply do not work. So, as documented on [the official OneKVM guide](https://one-kvm.mofeng.run/start_install/orangepizero_install/), there's a pre-packaged image from FruityKVM that we can use:
 ```
-wget https://dl.armbian.com/orangepizero/Bookworm_current_minimal -O armbian.img.xz
+wget https://github.com/jacobbar/fruity-pikvm/releases/download/os-images/Armbian_23.02.0-trunk_Orangepizero_jammy_current_5.15.85_msd-patched.zip -O armbian.zip
 ```
-
-Here I'll be using the minimal version of Armbian, as I want to keep the installation footprint as small as possible.
 
 After the download completes, the image can be written using the command below on Mac:
 ```
-xzcat armbian.img.xz | sudo dd of=/dev/diskX status=progress
+unzip armbian.zip
+sudo dd if=Armbian_23.02.0-trunk_Orangepizero_jammy_current_5.15.85.img of=/dev/diskX status=progress
 ```
 
 Where diskX is your SD card.
@@ -57,7 +56,7 @@ sudo date -s '2025-02-05 22:00:00'
 
 Next I install a few programs that are useful here (including ntp to set the date automatically :P):
 ```
-sudo apt-get update &&
+sudo apt-get update && \
 sudo apt-get install -y \
              ntp \
              tmux \
@@ -77,6 +76,12 @@ sudo nvim /etc/shadow
 The root line becomes something like this:
 ```
 root:!:20122:0:99999:7::: 
+```
+
+Also the following command does this for us:
+```
+sudo cp /etc/shadow /etc/shadow.bak && \ #backup the file first
+sudo perl -pe 's/root:.*?:/root:!:/' -i /etc/shadow 
 ```
 
 Next I also disable root login on SSH. This sed command does it:
@@ -107,19 +112,19 @@ sudo reboot
 
 ## Preparations for OneKVM
 
-It's needed to edit two things before installing and using OneKVM. First on the `/boot/armbianEnv.txt`, the following line must be changed from:
+It's needed to do a few things before installing and using OneKVM. First on the `/boot/armbianEnv.txt`, the following line must be changed from:
 ```
-overlays=usbhost2 usbhost3 tve
+overlays=usbhost2 usbhost3
 ```
 
 To:
 ```
-overlays=usbhost0 usbhost1 usbhost2 usbhost3 tve
+overlays=usbhost0 usbhost1 usbhost2 usbhost3
 ```
 
 This sed command does it:
 ```
-sudo sed -i /boot/armbianEnv.txt -e 's/overlays=usbhost2 usbhost3 tve/overlays=usbhost0 usbhost1 usbhost2 usbhost3 tve/'
+sudo sed -i /boot/armbianEnv.txt -e 's/overlays=usbhost2 usbhost3/overlays=usbhost0 usbhost1 usbhost2 usbhost3/'
 ```
 
 Next, the DTB must be edited to change the dr_mode to peripheral. First decompile the dtb:
@@ -137,6 +142,11 @@ Backup and replace the current dtb:
 ```
 sudo cp /boot/dtb/sun8i-h2-plus-orangepi-zero.dtb /boot/dtb/sun8i-h2-plus-orangepi-zero.dtb.bak
 sudo dtc -I dts -O dtb /boot/dtb/sun8i-h2-plus-orangepi-zero.dts -o /boot/dtb/sun8i-h2-plus-orangepi-zero.dtb
+```
+
+Finally, according to [OneKVM installation steps](https://one-kvm.mofeng.run/start_install/orangepizero_install/?h=zero), we need to empty the following file to prevent g_serial from loading on boot. 
+```
+echo "" | sudo tee /etc/modules-load.d/modules.conf
 ```
 
 Reboot:
@@ -194,6 +204,28 @@ BTW the default user and password is admin/admin.
 Just run this command and follow the prompts:
 ```
 sudo nmtui
+```
+
+## Getting a shell on the host via the web interface
+
+If you open the terminal via the web interface, you're going to get a shell in the container. In order to access the host using the web interface, you need to first install openssh-client in the container:
+```
+apt update && apt install openssh-client -y
+```
+
+Next check your container IP:
+```
+hostname -I
+```
+
+For example, if the output is the following:
+```
+172.18.0.2
+```
+
+The ssh command is going to be the following:
+```
+ssh <your-user>@172.18.0.1
 ```
 
 That's it!
